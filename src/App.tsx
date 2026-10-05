@@ -67,7 +67,7 @@ export default function App() {
   const trayRef = useRef<(PieceShape | null)[]>(tray);
   trayRef.current = tray;
 
-  // Sync best score to localStorage and track new record
+  // Sync best score to localStorage and track new record.
   useEffect(() => {
     if (score > bestScore) {
       setBestScore(score);
