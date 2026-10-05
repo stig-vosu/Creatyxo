@@ -1,0 +1,6 @@
+{
+  "name": "Creatyxo",
+  "description": "A modern mobile block puzzle game with an 8x8 board, score tracking cards, and piece tray.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
