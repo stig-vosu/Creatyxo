@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "A player score entry on the global shared leaderboard",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique player ID"
+        },
+        "username": {
+          "type": "string",
+          "description": "Display name of the player",
+          "maxLength": 30
+        },
+        "tag": {
+          "type": "string",
+          "description": "Optional numeric tag",
+          "maxLength": 10
+        },
+        "score": {
+          "type": "number",
+          "description": "Best score achieved"
+        },
+        "avatarLetter": {
+          "type": "string",
+          "description": "Single uppercase letter monogram",
+          "maxLength": 2
+        },
+        "tier": {
+          "type": "string",
+          "description": "Rank tier based on score",
+          "enum": ["Grandmaster", "Master", "Diamond", "Platinum", "Gold", "Silver", "Bronze"]
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Epoch timestamp in milliseconds when score was saved"
+        }
+      },
+      "required": ["id", "username", "score", "avatarLetter", "tier", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/leaderboard/{playerId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Global shared leaderboard entries keyed by unique player ID"
+    }
+  }
+}

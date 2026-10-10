@@ -3,6 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {
+  savePlayerRecordToFirestore,
+  getLeaderboardRecordsFromFirestore,
+  subscribeToLeaderboardUpdates,
+  testFirestoreConnection,
+  FirestoreLeaderboardRecord,
+} from './firebase';
+
 export interface PlayerProfile {
   username: string;
   tag?: string; // only present if rolled
@@ -82,6 +90,22 @@ const LEADERBOARD_STORAGE_KEY = 'creatyxo_confirmed_leaderboard';
 const PLAYER_ID_STORAGE_KEY = 'creatyxo_player_id';
 
 /**
+ * Checks if the current host is a static hosting platform (e.g., GitHub Pages)
+ * that does not have an Express backend server.
+ */
+function isStaticHost(): boolean {
+  if (typeof window === 'undefined') return true;
+  const host = window.location.hostname.toLowerCase();
+  return (
+    host.includes('github.io') ||
+    host.includes('gitlab.io') ||
+    host.includes('pages.dev') ||
+    host.includes('surge.sh') ||
+    window.location.protocol === 'file:'
+  );
+}
+
+/**
  * Gets or creates a persistent unique player ID for this user's account
  */
 export function getPlayerId(): string {
@@ -94,8 +118,13 @@ export function getPlayerId(): string {
   return id;
 }
 
+// Initial connection test
+if (typeof window !== 'undefined') {
+  testFirestoreConnection().catch(() => {});
+}
+
 /**
- * Saves or updates player's record in local fallback and pushes to the shared server
+ * Saves or updates player's record in local fallback and pushes to the shared database
  */
 export async function savePlayerToLeaderboard(profile: PlayerProfile, bestScore: number): Promise<void> {
   const playerId = getPlayerId();
@@ -103,6 +132,7 @@ export async function savePlayerToLeaderboard(profile: PlayerProfile, bestScore:
   const letter = (profile?.avatarLetter || username.charAt(0) || 'P').toUpperCase();
   const tag = profile?.tag ? profile.tag.trim() : undefined;
   const score = Math.max(0, bestScore);
+  const tier = getTierFromScore(score);
 
   // 1. Local storage backup
   if (typeof window !== 'undefined') {
@@ -113,7 +143,7 @@ export async function savePlayerToLeaderboard(profile: PlayerProfile, bestScore:
         tag,
         score,
         avatarLetter: letter,
-        tier: getTierFromScore(score),
+        tier,
       };
       localStorage.setItem(LEADERBOARD_STORAGE_KEY, JSON.stringify([entry]));
     } catch {
@@ -121,23 +151,49 @@ export async function savePlayerToLeaderboard(profile: PlayerProfile, bestScore:
     }
   }
 
-  // 2. Push to shared backend database so all persons see the record!
-  try {
-    await fetch('/api/leaderboard/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: playerId,
-        username,
-        tag,
-        score,
-        avatarLetter: letter,
-      }),
-    });
-  } catch {
-    // Graceful offline fallback
+  // 2. Push to Firebase Firestore (Global shared database for ALL users across the globe)
+  const firestoreRecord: FirestoreLeaderboardRecord = {
+    id: playerId,
+    username,
+    tag,
+    score,
+    avatarLetter: letter,
+    tier,
+    updatedAt: Date.now(),
+  };
+
+  await savePlayerRecordToFirestore(firestoreRecord);
+
+  // 3. Optional local express backend backup (Only if NOT running on static hosts like GitHub Pages)
+  if (!isStaticHost()) {
+    try {
+      await fetch('/api/leaderboard/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: playerId,
+          username,
+          tag,
+          score,
+          avatarLetter: letter,
+        }),
+      });
+    } catch {
+      // Graceful offline fallback
+    }
   }
 }
+
+/**
+ * Default sample records if database is completely new
+ */
+const DEFAULT_COMMUNITY_BENCHMARKS: Omit<LeaderboardEntry, 'rank' | 'isCurrentUser'>[] = [
+  { id: 'bot_1', username: 'NovaBlade', tag: '9421', score: 12450, avatarLetter: 'N', tier: 'Master' },
+  { id: 'bot_2', username: 'CyberGhost', tag: '8114', score: 8690, avatarLetter: 'C', tier: 'Diamond' },
+  { id: 'bot_3', username: 'VortexPilot', tag: '3720', score: 5420, avatarLetter: 'V', tier: 'Platinum' },
+  { id: 'bot_4', username: 'PulseHunter', tag: '6105', score: 3180, avatarLetter: 'P', tier: 'Platinum' },
+  { id: 'bot_5', username: 'EchoDrifter', tag: '2289', score: 1850, avatarLetter: 'E', tier: 'Silver' },
+];
 
 /**
  * Fetches the live shared leaderboard containing all players' records
@@ -159,22 +215,46 @@ export async function fetchSharedLeaderboard(
     score: number;
     avatarLetter: string;
     tier: LeaderboardEntry['tier'];
-    rank: number;
   }> = [];
 
+  // 1. Fetch from Firebase Firestore (Global shared database)
   try {
-    const res = await fetch('/api/leaderboard');
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data.entries)) {
-        rawEntries = data.entries;
-      }
+    const firestoreEntries = await getLeaderboardRecordsFromFirestore(100);
+    if (firestoreEntries && firestoreEntries.length > 0) {
+      rawEntries = firestoreEntries.map((e) => ({
+        id: e.id,
+        username: e.username,
+        tag: e.tag,
+        score: e.score,
+        avatarLetter: e.avatarLetter,
+        tier: e.tier,
+      }));
     }
   } catch {
-    // Offline or server booting
+    // Continue to fallbacks
   }
 
-  // If server is fresh or user not present or has a higher score locally, ensure user is included
+  // 2. If Firestore had 0 entries and we are NOT on static host, try local backend API
+  if (rawEntries.length === 0 && !isStaticHost()) {
+    try {
+      const res = await fetch('/api/leaderboard');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.entries)) {
+          rawEntries = data.entries;
+        }
+      }
+    } catch {
+      // Offline fallback
+    }
+  }
+
+  // 3. If still empty, use default community benchmarks
+  if (rawEntries.length === 0) {
+    rawEntries = [...DEFAULT_COMMUNITY_BENCHMARKS];
+  }
+
+  // 4. Ensure current user's profile is updated/included
   const existingUserIndex = rawEntries.findIndex(
     (e) => e.id === currentId || (e.username.toLowerCase() === safeUsername.toLowerCase() && e.tag === safeTag)
   );
@@ -183,11 +263,8 @@ export async function fetchSharedLeaderboard(
     if (safeScore > rawEntries[existingUserIndex].score) {
       rawEntries[existingUserIndex].score = safeScore;
       rawEntries[existingUserIndex].tier = getTierFromScore(safeScore);
-      // Trigger background sync to server
-      savePlayerToLeaderboard(userProfile, safeScore).catch(() => {});
     }
   } else if (userProfile.hasChosenName || safeScore > 0) {
-    // Add player to the list
     rawEntries.push({
       id: currentId,
       username: safeUsername,
@@ -195,10 +272,7 @@ export async function fetchSharedLeaderboard(
       score: safeScore,
       avatarLetter: safeLetter,
       tier: getTierFromScore(safeScore),
-      rank: 1,
     });
-    // Trigger background sync to server
-    savePlayerToLeaderboard(userProfile, safeScore).catch(() => {});
   }
 
   // Re-sort by score descending
@@ -262,9 +336,26 @@ export function buildLeaderboard(
     isCurrentUser: true,
   };
 
+  // Combine with benchmarks
+  const combined = [...DEFAULT_COMMUNITY_BENCHMARKS, userEntry];
+  combined.sort((a, b) => b.score - a.score);
+
+  let userRank = 1;
+  const list: LeaderboardEntry[] = combined.map((e, idx) => {
+    const isUser = e.id === currentId;
+    if (isUser) userRank = idx + 1;
+    return {
+      ...e,
+      rank: idx + 1,
+      isCurrentUser: isUser,
+    };
+  });
+
   return {
-    list: [userEntry],
-    userRank: 1,
+    list,
+    userRank,
     userEntry,
   };
 }
+
+export { subscribeToLeaderboardUpdates };

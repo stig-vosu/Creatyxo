@@ -9,6 +9,7 @@ import {
   LeaderboardEntry,
   buildLeaderboard,
   fetchSharedLeaderboard,
+  subscribeToLeaderboardUpdates,
   getTierBadgeStyle,
 } from '../game/leaderboard';
 
@@ -47,11 +48,15 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     }
   }, [playerProfile, bestScore]);
 
-  // Fetch live shared leaderboard on mount & periodic polling
+  // Fetch live shared leaderboard on mount and subscribe to real-time updates
   useEffect(() => {
     refreshSharedBoard();
-    const interval = setInterval(refreshSharedBoard, 12000);
-    return () => clearInterval(interval);
+    const unsubscribe = subscribeToLeaderboardUpdates(() => {
+      refreshSharedBoard();
+    });
+    return () => {
+      unsubscribe();
+    };
   }, [refreshSharedBoard]);
 
   const { list, userRank, userEntry } = leaderboardData;
