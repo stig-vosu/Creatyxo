@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   PlayerProfile,
+  LeaderboardEntry,
   buildLeaderboard,
+  fetchSharedLeaderboard,
   getTierBadgeStyle,
 } from '../game/leaderboard';
 
@@ -26,11 +28,33 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
   onOpenNameModal,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Build the complete leaderboard with player's confirmed record
-  const { list, userRank, userEntry } = useMemo(() => {
+  // Synchronous initial fallback so UI renders instantaneously
+  const [leaderboardData, setLeaderboardData] = useState(() => {
     return buildLeaderboard(playerProfile, bestScore);
+  });
+
+  const refreshSharedBoard = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const data = await fetchSharedLeaderboard(playerProfile, bestScore);
+      setLeaderboardData(data);
+    } catch {
+      // Keep existing data
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [playerProfile, bestScore]);
+
+  // Fetch live shared leaderboard on mount & periodic polling
+  useEffect(() => {
+    refreshSharedBoard();
+    const interval = setInterval(refreshSharedBoard, 12000);
+    return () => clearInterval(interval);
+  }, [refreshSharedBoard]);
+
+  const { list, userRank, userEntry } = leaderboardData;
 
   // Filter list by username or tag
   const filteredList = useMemo(() => {
@@ -56,9 +80,27 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           BACK
         </button>
 
-        <h2 className="text-sm font-bold text-white font-['Orbitron',sans-serif] tracking-wider text-center">
-          LEADERBOARD
-        </h2>
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-sm font-bold text-white font-['Orbitron',sans-serif] tracking-wider text-center">
+              LEADERBOARD
+            </h2>
+            <button
+              type="button"
+              onClick={refreshSharedBoard}
+              title="Refresh shared records"
+              className="text-[#3debe0] hover:text-white p-1 rounded transition-colors cursor-pointer"
+            >
+              <svg className={`w-3 h-3 fill-current ${isRefreshing ? 'animate-spin' : ''}`} viewBox="0 0 24 24">
+                <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
+              </svg>
+            </button>
+          </div>
+          <span className="text-[8px] font-bold tracking-widest text-emerald-400 font-['Orbitron',sans-serif] flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            LIVE SHARED ({list.length} {list.length === 1 ? 'PLAYER' : 'PLAYERS'})
+          </span>
+        </div>
 
         {onOpenNameModal ? (
           <button
@@ -224,11 +266,11 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
 
         {/* Clean explanatory card */}
         <div className="p-3 rounded-xl bg-[#0e1628]/50 border border-[#1b263d] text-center my-2">
-          <span className="text-[10px] text-slate-400 font-['Orbitron',sans-serif] block">
-            PERSONAL RECORD TRACKED
+          <span className="text-[10px] text-emerald-400 font-bold font-['Orbitron',sans-serif] block">
+            GLOBAL LIVE LEADERBOARD
           </span>
-          <span className="text-[9px] text-slate-500 font-['Orbitron',sans-serif] mt-0.5 block">
-            Your best score is automatically saved on this device.
+          <span className="text-[9px] text-slate-400 font-['Orbitron',sans-serif] mt-0.5 block">
+            Shared across all players & devices. Every player's record is automatically synced here.
           </span>
         </div>
       </div>

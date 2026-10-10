@@ -79,50 +79,180 @@ export function getTierBadgeStyle(tier: LeaderboardEntry['tier']): {
 }
 
 const LEADERBOARD_STORAGE_KEY = 'creatyxo_confirmed_leaderboard';
+const PLAYER_ID_STORAGE_KEY = 'creatyxo_player_id';
 
 /**
- * Saves or renames the single player account in persistent storage.
- * You cannot create duplicate accounts — changing name updates your one account.
+ * Gets or creates a persistent unique player ID for this user's account
  */
-export function savePlayerToLeaderboard(profile: PlayerProfile, bestScore: number) {
-  if (typeof window === 'undefined') return;
+export function getPlayerId(): string {
+  if (typeof window === 'undefined') return 'server-player';
+  let id = localStorage.getItem(PLAYER_ID_STORAGE_KEY);
+  if (!id) {
+    id = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    localStorage.setItem(PLAYER_ID_STORAGE_KEY, id);
+  }
+  return id;
+}
+
+/**
+ * Saves or updates player's record in local fallback and pushes to the shared server
+ */
+export async function savePlayerToLeaderboard(profile: PlayerProfile, bestScore: number): Promise<void> {
+  const playerId = getPlayerId();
+  const username = (profile?.username || 'Player').trim() || 'Player';
+  const letter = (profile?.avatarLetter || username.charAt(0) || 'P').toUpperCase();
+  const tag = profile?.tag ? profile.tag.trim() : undefined;
+  const score = Math.max(0, bestScore);
+
+  // 1. Local storage backup
+  if (typeof window !== 'undefined') {
+    try {
+      const entry: Omit<LeaderboardEntry, 'rank' | 'isCurrentUser'> = {
+        id: playerId,
+        username,
+        tag,
+        score,
+        avatarLetter: letter,
+        tier: getTierFromScore(score),
+      };
+      localStorage.setItem(LEADERBOARD_STORAGE_KEY, JSON.stringify([entry]));
+    } catch {
+      // Ignore
+    }
+  }
+
+  // 2. Push to shared backend database so all persons see the record!
   try {
-    const username = (profile?.username || 'Player').trim();
-    if (!username) return;
-
-    const letter = (profile?.avatarLetter || username.charAt(0) || 'P').toUpperCase();
-    const tag = profile?.tag ? profile.tag.trim() : undefined;
-
-    const entry: Omit<LeaderboardEntry, 'rank' | 'isCurrentUser'> = {
-      id: 'player-profile',
-      username,
-      tag,
-      score: Math.max(0, bestScore),
-      avatarLetter: letter,
-      tier: getTierFromScore(bestScore),
-    };
-
-    localStorage.setItem(LEADERBOARD_STORAGE_KEY, JSON.stringify([entry]));
+    await fetch('/api/leaderboard/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: playerId,
+        username,
+        tag,
+        score,
+        avatarLetter: letter,
+      }),
+    });
   } catch {
-    // Ignore storage errors
+    // Graceful offline fallback
   }
 }
 
 /**
- * Builds the player's leaderboard entry.
- * Guaranteed to never crash and shows your active profile and record.
+ * Fetches the live shared leaderboard containing all players' records
+ */
+export async function fetchSharedLeaderboard(
+  userProfile: PlayerProfile,
+  userBestScore: number
+): Promise<{ list: LeaderboardEntry[]; userRank: number; userEntry: LeaderboardEntry }> {
+  const currentId = getPlayerId();
+  const safeUsername = (userProfile?.username || 'Player').trim() || 'Player';
+  const safeTag = userProfile?.tag ? userProfile.tag.trim() : undefined;
+  const safeLetter = (userProfile?.avatarLetter || safeUsername.charAt(0) || 'P').toUpperCase();
+  const safeScore = Math.max(0, userBestScore || 0);
+
+  let rawEntries: Array<{
+    id: string;
+    username: string;
+    tag?: string;
+    score: number;
+    avatarLetter: string;
+    tier: LeaderboardEntry['tier'];
+    rank: number;
+  }> = [];
+
+  try {
+    const res = await fetch('/api/leaderboard');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.entries)) {
+        rawEntries = data.entries;
+      }
+    }
+  } catch {
+    // Offline or server booting
+  }
+
+  // If server is fresh or user not present or has a higher score locally, ensure user is included
+  const existingUserIndex = rawEntries.findIndex(
+    (e) => e.id === currentId || (e.username.toLowerCase() === safeUsername.toLowerCase() && e.tag === safeTag)
+  );
+
+  if (existingUserIndex >= 0) {
+    if (safeScore > rawEntries[existingUserIndex].score) {
+      rawEntries[existingUserIndex].score = safeScore;
+      rawEntries[existingUserIndex].tier = getTierFromScore(safeScore);
+      // Trigger background sync to server
+      savePlayerToLeaderboard(userProfile, safeScore).catch(() => {});
+    }
+  } else if (userProfile.hasChosenName || safeScore > 0) {
+    // Add player to the list
+    rawEntries.push({
+      id: currentId,
+      username: safeUsername,
+      tag: safeTag,
+      score: safeScore,
+      avatarLetter: safeLetter,
+      tier: getTierFromScore(safeScore),
+      rank: 1,
+    });
+    // Trigger background sync to server
+    savePlayerToLeaderboard(userProfile, safeScore).catch(() => {});
+  }
+
+  // Re-sort by score descending
+  rawEntries.sort((a, b) => b.score - a.score);
+
+  // Map into LeaderboardEntry with ranks and currentUser flags
+  let userRank = 1;
+  let userEntry: LeaderboardEntry = {
+    id: currentId,
+    rank: 1,
+    username: safeUsername,
+    tag: safeTag,
+    score: safeScore,
+    avatarLetter: safeLetter,
+    tier: getTierFromScore(safeScore),
+    isCurrentUser: true,
+  };
+
+  const list: LeaderboardEntry[] = rawEntries.map((e, idx) => {
+    const isUser = e.id === currentId || (e.username.toLowerCase() === safeUsername.toLowerCase() && e.tag === safeTag);
+    const entryItem: LeaderboardEntry = {
+      ...e,
+      rank: idx + 1,
+      isCurrentUser: isUser,
+    };
+    if (isUser) {
+      userRank = idx + 1;
+      userEntry = entryItem;
+    }
+    return entryItem;
+  });
+
+  if (list.length === 0) {
+    list.push(userEntry);
+  }
+
+  return { list, userRank, userEntry };
+}
+
+/**
+ * Builds synchronous fallback leaderboard while async shared fetch is resolving
  */
 export function buildLeaderboard(
   userProfile: PlayerProfile,
   userBestScore: number
 ): { list: LeaderboardEntry[]; userRank: number; userEntry: LeaderboardEntry } {
+  const currentId = getPlayerId();
   const safeUsername = (userProfile?.username || 'Player').trim() || 'Player';
   const safeTag = userProfile?.tag ? userProfile.tag.trim() : undefined;
   const safeLetter = (userProfile?.avatarLetter || safeUsername.charAt(0) || 'P').toUpperCase();
   const safeScore = Math.max(0, userBestScore || 0);
 
   const userEntry: LeaderboardEntry = {
-    id: 'player-profile',
+    id: currentId,
     rank: 1,
     username: safeUsername,
     tag: safeTag,

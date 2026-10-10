@@ -39,6 +39,7 @@ import {
   PlayerProfile,
   generateRandomName,
   buildLeaderboard,
+  fetchSharedLeaderboard,
   savePlayerToLeaderboard,
 } from './game/leaderboard';
 
@@ -291,9 +292,19 @@ export default function App() {
     }
   }, [score, bestScore, playerProfile]);
 
-  // Compute player global rank
-  const { userRank } = useMemo(() => {
-    return buildLeaderboard(playerProfile, bestScore);
+  // Compute player global rank from shared leaderboard
+  const [userRank, setUserRank] = useState<number>(() => {
+    return buildLeaderboard(playerProfile, bestScore).userRank;
+  });
+
+  useEffect(() => {
+    fetchSharedLeaderboard(playerProfile, bestScore)
+      .then((data) => {
+        if (data && typeof data.userRank === 'number') {
+          setUserRank(data.userRank);
+        }
+      })
+      .catch(() => {});
   }, [playerProfile, bestScore]);
 
   // Restart / Reset game
@@ -619,6 +630,7 @@ export default function App() {
         if (!hasValidMove) {
           setIsGameOver(true);
           playGameOverSound(soundEnabled);
+          savePlayerToLeaderboard(playerProfile, Math.max(score, bestScore)).catch(() => {});
         }
       }
 
