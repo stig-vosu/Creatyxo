@@ -18,19 +18,27 @@ import {
   onSnapshot,
   Unsubscribe,
 } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { getFirebaseConfig } from './firebaseConfig';
 
-let app: FirebaseApp;
-if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApp();
+const config = getFirebaseConfig();
+
+let app: FirebaseApp | null = null;
+export let db: Firestore | null = null;
+
+if (config) {
+  try {
+    if (!getApps().length) {
+      app = initializeApp(config);
+    } else {
+      app = getApp();
+    }
+    db = config.firestoreDatabaseId
+      ? getFirestore(app, config.firestoreDatabaseId)
+      : getFirestore(app);
+  } catch (err) {
+    console.warn('Firebase initialization notice:', err);
+  }
 }
-
-// Connect to the provisioned Firestore database
-export const db: Firestore = firebaseConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
 
 export interface FirestoreLeaderboardRecord {
   id: string;
@@ -46,6 +54,7 @@ export interface FirestoreLeaderboardRecord {
  * Validates Firestore connectivity on initial load
  */
 export async function testFirestoreConnection(): Promise<boolean> {
+  if (!db) return false;
   try {
     await getDocFromServer(doc(db, 'leaderboard', 'ping'));
     return true;
@@ -63,6 +72,7 @@ export async function testFirestoreConnection(): Promise<boolean> {
 export async function savePlayerRecordToFirestore(
   record: FirestoreLeaderboardRecord
 ): Promise<boolean> {
+  if (!db) return false;
   try {
     const docRef = doc(db, 'leaderboard', record.id);
     await setDoc(docRef, {
@@ -87,6 +97,7 @@ export async function savePlayerRecordToFirestore(
 export async function getLeaderboardRecordsFromFirestore(
   limitCount = 100
 ): Promise<FirestoreLeaderboardRecord[]> {
+  if (!db) return [];
   try {
     const q = query(
       collection(db, 'leaderboard'),
@@ -123,6 +134,7 @@ export function subscribeToLeaderboardUpdates(
   onUpdate: (records: FirestoreLeaderboardRecord[]) => void,
   limitCount = 100
 ): Unsubscribe {
+  if (!db) return () => {};
   try {
     const q = query(
       collection(db, 'leaderboard'),
@@ -150,7 +162,7 @@ export function subscribeToLeaderboardUpdates(
         onUpdate(records);
       },
       (error) => {
-        console.warn('Firestore subscription error:', error);
+        console.warn('Firestore subscription notice:', error);
       }
     );
   } catch (err) {
