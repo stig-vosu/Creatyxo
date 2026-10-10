@@ -10,6 +10,7 @@ import {
   testFirestoreConnection,
   FirestoreLeaderboardRecord,
 } from './firebase';
+import { validatePlayerName } from './wordFilter';
 
 export interface PlayerProfile {
   username: string;
@@ -128,7 +129,14 @@ if (typeof window !== 'undefined') {
  */
 export async function savePlayerToLeaderboard(profile: PlayerProfile, bestScore: number): Promise<void> {
   const playerId = getPlayerId();
-  const username = (profile?.username || 'Player').trim() || 'Player';
+  let username = (profile?.username || 'Player').trim() || 'Player';
+  
+  // Guard against forbidden words before publishing to shared leaderboard
+  const check = validatePlayerName(username);
+  if (!check.isValid) {
+    username = 'Player';
+  }
+
   const letter = (profile?.avatarLetter || username.charAt(0) || 'P').toUpperCase();
   const tag = profile?.tag ? profile.tag.trim() : undefined;
   const score = Math.max(0, bestScore);
@@ -221,14 +229,18 @@ export async function fetchSharedLeaderboard(
   try {
     const firestoreEntries = await getLeaderboardRecordsFromFirestore(100);
     if (firestoreEntries && firestoreEntries.length > 0) {
-      rawEntries = firestoreEntries.map((e) => ({
-        id: e.id,
-        username: e.username,
-        tag: e.tag,
-        score: e.score,
-        avatarLetter: e.avatarLetter,
-        tier: e.tier,
-      }));
+      rawEntries = firestoreEntries.map((e) => {
+        const check = validatePlayerName(e.username || '');
+        const safeName = check.isValid ? e.username : 'Player';
+        return {
+          id: e.id,
+          username: safeName,
+          tag: e.tag,
+          score: e.score,
+          avatarLetter: (e.avatarLetter || safeName.charAt(0) || 'P').toUpperCase(),
+          tier: e.tier,
+        };
+      });
     }
   } catch {
     // Continue to fallbacks

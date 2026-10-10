@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { PlayerProfile, generateRandomName } from '../game/leaderboard';
+import { validatePlayerName } from '../game/wordFilter';
 
 interface NameSetupModalProps {
   currentProfile: PlayerProfile;
@@ -51,6 +52,13 @@ export const NameSetupModal: React.FC<NameSetupModalProps> = ({
     }
     if (trimmed.length > 16) {
       setError('Name must be 16 characters or less');
+      return;
+    }
+
+    // Deterministic forbidden word check (100% offline, zero AI APIs)
+    const check = validatePlayerName(trimmed);
+    if (!check.isValid) {
+      setError(check.reason || 'This name is not allowed. Please choose another.');
       return;
     }
 
