@@ -261,31 +261,31 @@ export async function fetchSharedLeaderboard(
     }
   }
 
-  // 3. If still empty, use default community benchmarks
-  if (rawEntries.length === 0) {
-    rawEntries = [...DEFAULT_COMMUNITY_BENCHMARKS];
-  }
-
-  // 4. Ensure current user's profile is updated/included
-  const existingUserIndex = rawEntries.findIndex(
-    (e) => e.id === currentId || (e.username.toLowerCase() === safeUsername.toLowerCase() && e.tag === safeTag)
-  );
-
-  if (existingUserIndex >= 0) {
-    if (safeScore > rawEntries[existingUserIndex].score) {
-      rawEntries[existingUserIndex].score = safeScore;
-      rawEntries[existingUserIndex].tier = getTierFromScore(safeScore);
+    // 3. Fallback benchmarks only if zero Firestore records exist
+    if (rawEntries.length === 0) {
+      rawEntries = [...DEFAULT_COMMUNITY_BENCHMARKS];
     }
-  } else if (userProfile.hasChosenName || safeScore > 0) {
-    rawEntries.push({
-      id: currentId,
-      username: safeUsername,
-      tag: safeTag,
-      score: safeScore,
-      avatarLetter: safeLetter,
-      tier: getTierFromScore(safeScore),
-    });
-  }
+
+    // 4. Ensure current user's profile is updated/included
+    const existingUserIndex = rawEntries.findIndex(
+      (e) => e.id === currentId || (e.username.toLowerCase() === safeUsername.toLowerCase() && e.tag === safeTag)
+    );
+
+    if (existingUserIndex >= 0) {
+      if (safeScore > rawEntries[existingUserIndex].score) {
+        rawEntries[existingUserIndex].score = safeScore;
+        rawEntries[existingUserIndex].tier = getTierFromScore(safeScore);
+      }
+    } else {
+      rawEntries.push({
+        id: currentId,
+        username: safeUsername,
+        tag: safeTag,
+        score: safeScore,
+        avatarLetter: safeLetter,
+        tier: getTierFromScore(safeScore),
+      });
+    }
 
   // Re-sort by score descending
   rawEntries.sort((a, b) => b.score - a.score);

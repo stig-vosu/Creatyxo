@@ -16,13 +16,30 @@ function getAudioContext(): AudioContext | null {
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (AudioContextClass) {
-      audioCtx = new AudioContextClass();
+      try {
+        audioCtx = new AudioContextClass();
+      } catch {
+        return null;
+      }
     }
   }
   if (audioCtx && audioCtx.state === 'suspended') {
-    audioCtx.resume();
+    audioCtx.resume().catch(() => {
+      // Browsers will reject or warn if resumed prior to a user gesture
+    });
   }
   return audioCtx;
+}
+
+/**
+ * Call on any explicit user interaction (click, pointer down, key down, touch start)
+ * to unlock Web Audio playback seamlessly in Chrome and Safari.
+ */
+export function unlockAudioContext(): void {
+  const ctx = getAudioContext();
+  if (ctx && ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
 }
 
 // Volume Levels (0.0 to 1.0)
@@ -39,12 +56,11 @@ export function getSoundVolume(): number {
 
 export function setMusicVolume(volume: number) {
   currentMusicVolume = Math.max(0, Math.min(1, volume));
-  const ctx = getAudioContext();
-  if (ctx && musicGainNode && isMusicPlaying) {
+  if (audioCtx && musicGainNode && isMusicPlaying) {
     try {
-      musicGainNode.gain.cancelScheduledValues(ctx.currentTime);
-      musicGainNode.gain.setValueAtTime(musicGainNode.gain.value, ctx.currentTime);
-      musicGainNode.gain.linearRampToValueAtTime(0.92 * currentMusicVolume, ctx.currentTime + 0.05);
+      musicGainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+      musicGainNode.gain.setValueAtTime(musicGainNode.gain.value, audioCtx.currentTime);
+      musicGainNode.gain.linearRampToValueAtTime(0.92 * currentMusicVolume, audioCtx.currentTime + 0.05);
     } catch {
       // Ignore
     }

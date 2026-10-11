@@ -29,6 +29,7 @@ import {
   setSoundVolume,
   setMusicVolume,
   playSoundVolumePreview,
+  unlockAudioContext,
 } from './game/audio';
 import { HomeScreen } from './components/HomeScreen';
 import { LeaderboardScreen } from './components/LeaderboardScreen';
@@ -170,10 +171,27 @@ export default function App() {
   });
   const [isAudioSettingsOpen, setIsAudioSettingsOpen] = useState<boolean>(false);
 
-  // Synchronize initial audio volume levels
+  // Synchronize initial audio volume levels & unlock audio on first user gesture
   useEffect(() => {
     setSoundVolume(soundVolume);
     setMusicVolume(musicVolume);
+
+    const handleFirstUserInteraction = () => {
+      unlockAudioContext();
+      window.removeEventListener('pointerdown', handleFirstUserInteraction);
+      window.removeEventListener('keydown', handleFirstUserInteraction);
+      window.removeEventListener('touchstart', handleFirstUserInteraction);
+    };
+
+    window.addEventListener('pointerdown', handleFirstUserInteraction, { passive: true });
+    window.addEventListener('keydown', handleFirstUserInteraction, { passive: true });
+    window.addEventListener('touchstart', handleFirstUserInteraction, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', handleFirstUserInteraction);
+      window.removeEventListener('keydown', handleFirstUserInteraction);
+      window.removeEventListener('touchstart', handleFirstUserInteraction);
+    };
   }, []);
 
   const handleSoundVolumeChange = useCallback((val: number) => {
@@ -283,9 +301,7 @@ export default function App() {
       setIsNewRecord(true);
       try {
         localStorage.setItem('creatyxo_best_score', score.toString());
-        if (playerProfile.hasChosenName) {
-          savePlayerToLeaderboard(playerProfile, score);
-        }
+        savePlayerToLeaderboard(playerProfile, score);
       } catch {
         // Ignore
       }

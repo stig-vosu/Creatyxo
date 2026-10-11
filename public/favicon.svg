@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3debe0"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e"/>
+      <stop offset="100%" stop-color="#e11d48"/>
+    </linearGradient>
+    <linearGradient id="g3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <linearGradient id="g4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#7e22ce"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded rect -->
+  <rect width="64" height="64" rx="16" fill="#0b111e"/>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="none" stroke="#1e293b" stroke-width="2"/>
+  
+  <!-- 4 Jewel Puzzle Blocks arranged in a dynamic 2x2 grid -->
+  <rect x="10" y="10" width="20" height="20" rx="5" fill="url(#g1)"/>
+  <rect x="34" y="10" width="20" height="20" rx="5" fill="url(#g2)"/>
+  <rect x="10" y="34" width="20" height="20" rx="5" fill="url(#g3)"/>
+  <rect x="34" y="34" width="20" height="20" rx="5" fill="url(#g4)"/>
+
+  <!-- Inner glossy facets -->
+  <rect x="12" y="12" width="16" height="5" rx="2" fill="white" fill-opacity="0.35"/>
+  <rect x="36" y="12" width="16" height="5" rx="2" fill="white" fill-opacity="0.35"/>
+  <rect x="12" y="36" width="16" height="5" rx="2" fill="white" fill-opacity="0.35"/>
+  <rect x="36" y="36" width="16" height="5" rx="2" fill="white" fill-opacity="0.35"/>
+</svg>
