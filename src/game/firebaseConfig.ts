@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import firebaseAppletConfig from '../../firebase-applet-config.json';
+
 export interface FirebaseConfig {
   projectId: string;
   appId: string;
@@ -13,58 +15,66 @@ export interface FirebaseConfig {
   messagingSenderId?: string;
 }
 
-// Safely probe for local firebase-applet-config.json without hard-crashing if gitignored
-const localConfigs = import.meta.glob<{ default?: Record<string, string> }>(
-  '../../firebase-applet-config.json',
-  { eager: true }
-);
+// Built-in project fallback ensures that whether running in AI Studio, Vite dev,
+// Node/SSR, or GitHub Pages without GitHub Secrets configured, the live shared leaderboard always works.
+const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
+  projectId: 'trans-buckeye-cw1sf',
+  appId: '1:1073550195556:web:6624fc83ba505c05ad1871',
+  apiKey: 'AIzaSyAf9v2zkpst-lmo8SM9tg3Xduc_vB-45ig',
+  authDomain: 'trans-buckeye-cw1sf.firebaseapp.com',
+  firestoreDatabaseId: 'ai-studio-blockblastpuzzle-bb71321f-7963-4cb1-9fb6-11b668a529c7',
+  storageBucket: 'trans-buckeye-cw1sf.firebasestorage.app',
+  messagingSenderId: '1073550195556',
+};
 
-const localData = localConfigs['../../firebase-applet-config.json']?.default || {};
+const localData = (firebaseAppletConfig as unknown as Record<string, string>) || {};
 
 /**
- * Resolves Firebase configuration safely:
- * 1. Checks environment variables (VITE_FIREBASE_*) - recommended for public GitHub repos
- * 2. Falls back to local config file if present
+ * Resolves Firebase configuration safely with priority:
+ * 1. Environment variables (VITE_FIREBASE_*) if explicitly provided
+ * 2. firebase-applet-config.json
+ * 3. Embedded project defaults
  */
-export function getFirebaseConfig(): FirebaseConfig | null {
+export function getFirebaseConfig(): FirebaseConfig {
+  const env = (typeof import.meta !== 'undefined' && import.meta.env
+    ? import.meta.env
+    : {}) as Record<string, string | undefined>;
+
   const apiKey =
-    import.meta.env.VITE_FIREBASE_API_KEY ||
+    env.VITE_FIREBASE_API_KEY ||
     localData.apiKey ||
-    '';
+    DEFAULT_FIREBASE_CONFIG.apiKey;
 
   const projectId =
-    import.meta.env.VITE_FIREBASE_PROJECT_ID ||
+    env.VITE_FIREBASE_PROJECT_ID ||
     localData.projectId ||
-    '';
+    DEFAULT_FIREBASE_CONFIG.projectId;
 
   const appId =
-    import.meta.env.VITE_FIREBASE_APP_ID ||
+    env.VITE_FIREBASE_APP_ID ||
     localData.appId ||
-    '';
+    DEFAULT_FIREBASE_CONFIG.appId;
 
   const authDomain =
-    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ||
+    env.VITE_FIREBASE_AUTH_DOMAIN ||
     localData.authDomain ||
+    DEFAULT_FIREBASE_CONFIG.authDomain ||
     (projectId ? `${projectId}.firebaseapp.com` : '');
 
   const firestoreDatabaseId =
-    import.meta.env.VITE_FIREBASE_DATABASE_ID ||
+    env.VITE_FIREBASE_DATABASE_ID ||
     localData.firestoreDatabaseId ||
-    undefined;
+    DEFAULT_FIREBASE_CONFIG.firestoreDatabaseId;
 
   const storageBucket =
-    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ||
+    env.VITE_FIREBASE_STORAGE_BUCKET ||
     localData.storageBucket ||
-    undefined;
+    DEFAULT_FIREBASE_CONFIG.storageBucket;
 
   const messagingSenderId =
-    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ||
+    env.VITE_FIREBASE_MESSAGING_SENDER_ID ||
     localData.messagingSenderId ||
-    undefined;
-
-  if (!apiKey || !projectId) {
-    return null;
-  }
+    DEFAULT_FIREBASE_CONFIG.messagingSenderId;
 
   return {
     apiKey,

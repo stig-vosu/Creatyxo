@@ -1,8 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
     match /leaderboard/{playerId} {
-      // Allow everyone to read the global leaderboard
+      // Allow everyone to read the global shared leaderboard
       allow read: if true;
 
       // Allow players to submit or update their own record with validation
@@ -10,6 +15,7 @@ service cloud.firestore {
         && request.resource.data.id == playerId
         && request.resource.data.score is number
         && request.resource.data.score >= 0
+        && request.resource.data.score <= 10000000
         && request.resource.data.username is string
         && request.resource.data.username.size() > 0
         && request.resource.data.username.size() <= 30

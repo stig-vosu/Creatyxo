@@ -20,12 +20,56 @@ import {
 } from 'firebase/firestore';
 import { getFirebaseConfig } from './firebaseConfig';
 
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: null,
+      email: null,
+      emailVerified: null,
+      isAnonymous: true,
+      tenantId: null,
+      providerInfo: [],
+    },
+    operationType,
+    path,
+  };
+  console.warn('Firestore notice:', JSON.stringify(errInfo));
+}
+
 const config = getFirebaseConfig();
 
 let app: FirebaseApp | null = null;
 export let db: Firestore | null = null;
+let isDbOnline = true;
 
-if (config) {
+if (config && config.apiKey && config.projectId) {
   try {
     if (!getApps().length) {
       app = initializeApp(config);
@@ -38,6 +82,10 @@ if (config) {
   } catch (err) {
     console.warn('Firebase initialization notice:', err);
   }
+}
+
+export function isFirestoreOnline(): boolean {
+  return db !== null && isDbOnline;
 }
 
 export interface FirestoreLeaderboardRecord {
@@ -54,15 +102,23 @@ export interface FirestoreLeaderboardRecord {
  * Validates Firestore connectivity on initial load
  */
 export async function testFirestoreConnection(): Promise<boolean> {
-  if (!db) return false;
+  if (!db) {
+    isDbOnline = false;
+    return false;
+  }
   try {
     await getDocFromServer(doc(db, 'leaderboard', 'ping'));
+    isDbOnline = true;
     return true;
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.warn('Firestore is currently running offline.');
+      isDbOnline = false;
+    } else {
+      // Permission denied on ping doc or doc doesn't exist still means server is reachable
+      isDbOnline = true;
     }
-    return false;
+    return isDbOnline;
   }
 }
 
@@ -75,18 +131,23 @@ export async function savePlayerRecordToFirestore(
   if (!db) return false;
   try {
     const docRef = doc(db, 'leaderboard', record.id);
-    await setDoc(docRef, {
-      id: record.id,
-      username: record.username,
-      tag: record.tag || null,
-      score: record.score,
-      avatarLetter: record.avatarLetter,
-      tier: record.tier,
-      updatedAt: record.updatedAt || Date.now(),
-    }, { merge: true });
+    await setDoc(
+      docRef,
+      {
+        id: record.id,
+        username: record.username,
+        tag: record.tag || null,
+        score: record.score,
+        avatarLetter: record.avatarLetter,
+        tier: record.tier,
+        updatedAt: record.updatedAt || Date.now(),
+      },
+      { merge: true }
+    );
+    isDbOnline = true;
     return true;
   } catch (err) {
-    console.warn('Could not save record to Firestore, saving locally:', err);
+    handleFirestoreError(err, OperationType.WRITE, `leaderboard/${record.id}`);
     return false;
   }
 }
@@ -105,6 +166,7 @@ export async function getLeaderboardRecordsFromFirestore(
       limit(limitCount)
     );
     const snap = await getDocs(q);
+    isDbOnline = true;
     const records: FirestoreLeaderboardRecord[] = [];
     snap.forEach((docItem) => {
       const data = docItem.data();
@@ -122,7 +184,7 @@ export async function getLeaderboardRecordsFromFirestore(
     });
     return records;
   } catch (err) {
-    console.warn('Could not load leaderboard from Firestore, falling back to local storage:', err);
+    handleFirestoreError(err, OperationType.LIST, 'leaderboard');
     return [];
   }
 }
@@ -144,6 +206,7 @@ export function subscribeToLeaderboardUpdates(
     return onSnapshot(
       q,
       (snap) => {
+        isDbOnline = true;
         const records: FirestoreLeaderboardRecord[] = [];
         snap.forEach((docItem) => {
           const data = docItem.data();
@@ -162,11 +225,11 @@ export function subscribeToLeaderboardUpdates(
         onUpdate(records);
       },
       (error) => {
-        console.warn('Firestore subscription notice:', error);
+        handleFirestoreError(error, OperationType.GET, 'leaderboard');
       }
     );
   } catch (err) {
-    console.warn('Failed to attach Firestore listener:', err);
+    handleFirestoreError(err, OperationType.GET, 'leaderboard');
     return () => {};
   }
 }

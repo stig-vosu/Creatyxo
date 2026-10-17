@@ -8,6 +8,7 @@ import {
   getLeaderboardRecordsFromFirestore,
   subscribeToLeaderboardUpdates,
   testFirestoreConnection,
+  isFirestoreOnline,
   FirestoreLeaderboardRecord,
 } from './firebase';
 import { validatePlayerName } from './wordFilter';
@@ -271,10 +272,15 @@ export async function fetchSharedLeaderboard(
       (e) => e.id === currentId || (e.username.toLowerCase() === safeUsername.toLowerCase() && e.tag === safeTag)
     );
 
+    let shouldSyncToFirestore = false;
     if (existingUserIndex >= 0) {
       if (safeScore > rawEntries[existingUserIndex].score) {
         rawEntries[existingUserIndex].score = safeScore;
         rawEntries[existingUserIndex].tier = getTierFromScore(safeScore);
+        rawEntries[existingUserIndex].username = safeUsername;
+        rawEntries[existingUserIndex].tag = safeTag;
+        rawEntries[existingUserIndex].avatarLetter = safeLetter;
+        shouldSyncToFirestore = true;
       }
     } else {
       rawEntries.push({
@@ -285,6 +291,21 @@ export async function fetchSharedLeaderboard(
         avatarLetter: safeLetter,
         tier: getTierFromScore(safeScore),
       });
+      if (safeScore > 0) {
+        shouldSyncToFirestore = true;
+      }
+    }
+
+    if (shouldSyncToFirestore) {
+      savePlayerRecordToFirestore({
+        id: currentId,
+        username: safeUsername,
+        tag: safeTag,
+        score: safeScore,
+        avatarLetter: safeLetter,
+        tier: getTierFromScore(safeScore),
+        updatedAt: Date.now(),
+      }).catch(() => {});
     }
 
   // Re-sort by score descending
@@ -370,4 +391,4 @@ export function buildLeaderboard(
   };
 }
 
-export { subscribeToLeaderboardUpdates };
+export { subscribeToLeaderboardUpdates, isFirestoreOnline };

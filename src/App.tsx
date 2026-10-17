@@ -294,19 +294,26 @@ export default function App() {
     });
   }, []);
 
-  // Sync best score to localStorage and save to real leaderboard
+  // Sync best score to localStorage and save to shared global leaderboard
   useEffect(() => {
     if (score > bestScore) {
       setBestScore(score);
       setIsNewRecord(true);
       try {
         localStorage.setItem('creatyxo_best_score', score.toString());
-        savePlayerToLeaderboard(playerProfile, score);
+        savePlayerToLeaderboard(playerProfile, score).catch(() => {});
       } catch {
         // Ignore
       }
     }
   }, [score, bestScore, playerProfile]);
+
+  // Initial sync: Ensure any existing best score is pushed to the global leaderboard
+  useEffect(() => {
+    if (bestScore > 0) {
+      savePlayerToLeaderboard(playerProfile, bestScore).catch(() => {});
+    }
+  }, []);
 
   // Compute player global rank from shared leaderboard
   const [userRank, setUserRank] = useState<number>(() => {

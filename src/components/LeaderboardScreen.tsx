@@ -10,6 +10,7 @@ import {
   buildLeaderboard,
   fetchSharedLeaderboard,
   subscribeToLeaderboardUpdates,
+  isFirestoreOnline,
   getTierBadgeStyle,
 } from '../game/leaderboard';
 
@@ -30,6 +31,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => isFirestoreOnline());
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number>(Date.now());
 
   // Synchronous initial fallback so UI renders instantaneously
   const [leaderboardData, setLeaderboardData] = useState(() => {
@@ -41,6 +44,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
     try {
       const data = await fetchSharedLeaderboard(playerProfile, bestScore);
       setLeaderboardData(data);
+      setIsOnline(isFirestoreOnline());
+      setLastRefreshedAt(Date.now());
     } catch {
       // Keep existing data
     } finally {
@@ -93,17 +98,26 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
             <button
               type="button"
               onClick={refreshSharedBoard}
-              title="Refresh shared records"
-              className="text-[#3debe0] hover:text-white p-1 rounded transition-colors cursor-pointer"
+              disabled={isRefreshing}
+              title="Refresh shared records from global database"
+              className="text-[#3debe0] hover:text-white p-1 rounded transition-colors cursor-pointer disabled:opacity-50"
             >
-              <svg className={`w-3 h-3 fill-current ${isRefreshing ? 'animate-spin' : ''}`} viewBox="0 0 24 24">
+              <svg className={`w-3.5 h-3.5 fill-current ${isRefreshing ? 'animate-spin' : ''}`} viewBox="0 0 24 24">
                 <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
               </svg>
             </button>
           </div>
-          <span className="text-[8px] font-bold tracking-widest text-emerald-400 font-['Orbitron',sans-serif] flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            LIVE SHARED ({list.length} {list.length === 1 ? 'PLAYER' : 'PLAYERS'})
+          <span
+            className={`text-[8px] font-bold tracking-widest font-['Orbitron',sans-serif] flex items-center gap-1 ${
+              isOnline ? 'text-emerald-400' : 'text-amber-400'
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+              }`}
+            />
+            {isOnline ? 'LIVE GLOBAL SYNC' : 'OFFLINE CACHE'} ({list.length} {list.length === 1 ? 'PLAYER' : 'PLAYERS'})
           </span>
         </div>
 
