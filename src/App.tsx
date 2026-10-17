@@ -44,17 +44,17 @@ import {
   savePlayerToLeaderboard,
 } from './game/leaderboard';
 
-// Tutorial Interactive Testing Configurations
-const TUTORIAL_STEP1_PIECES: PieceShape[] = [
+// Tutorial Interactive Testing Configurations: Spawn exactly 1 piece in slot 1 (center)
+const TUTORIAL_STEP1_PIECES: (PieceShape | null)[] = [
+  null,
   { id: 'tut-cube', name: '2x2 Square', matrix: [[1, 1], [1, 1]], color: 'cyan' },
-  { id: 'tut-h3', name: '3x1 Line', matrix: [[1, 1, 1]], color: 'orange' },
-  { id: 'tut-v3', name: '1x3 Column', matrix: [[1], [1], [1]], color: 'purple' },
+  null,
 ];
 
-const TUTORIAL_STEP2_PIECES: PieceShape[] = [
+const TUTORIAL_STEP2_PIECES: (PieceShape | null)[] = [
+  null,
   { id: 'tut-h2', name: '2x1 Line', matrix: [[1, 1]], color: 'cyan' },
-  { id: 'tut-dot', name: 'Single Block', matrix: [[1]], color: 'gold' },
-  { id: 'tut-corner', name: 'Corner', matrix: [[1, 1], [0, 1]], color: 'rose' },
+  null,
 ];
 
 function createTutorialStep2Grid(): GridState {
@@ -367,6 +367,20 @@ export default function App() {
     setIsPaused(false);
     setActiveScreen('game');
   }, [musicEnabled]);
+
+  // Select specific tutorial step (supports interactive floating tabs)
+  const handleSelectTutorialStep = useCallback((targetStep: 1 | 2 | 3) => {
+    setTutorialStep(targetStep);
+    if (targetStep === 1) {
+      setGrid(createEmptyGrid());
+      setTray(TUTORIAL_STEP1_PIECES);
+    } else if (targetStep === 2) {
+      setGrid(createTutorialStep2Grid());
+      setTray(TUTORIAL_STEP2_PIECES);
+    } else {
+      setTray([null, null, null]);
+    }
+  }, []);
 
   // Start game flow with first-time interactive testing tutorial trigger
   const handleStartGame = () => {
@@ -865,14 +879,15 @@ export default function App() {
                 targetC={tutorialStep === 1 ? 3 : 3}
                 piece={
                   tutorialStep === 1
-                    ? TUTORIAL_STEP1_PIECES[0]
+                    ? (TUTORIAL_STEP1_PIECES[1] as PieceShape)
                     : tutorialStep === 2
-                    ? TUTORIAL_STEP2_PIECES[0]
+                    ? (TUTORIAL_STEP2_PIECES[1] as PieceShape)
                     : null
                 }
-                traySlotIndex={0}
+                traySlotIndex={1}
                 boardElement={boardRef.current}
                 isDragging={dragging !== null}
+                onSelectStep={handleSelectTutorialStep}
                 onSkip={handleSkipTutorial}
                 onStartPlaying={handleFinishTutorial}
               />
