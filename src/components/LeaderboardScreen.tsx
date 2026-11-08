@@ -80,27 +80,29 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden select-none animate-fadeIn">
-      {/* 1. Header (Fixed top, never shrinks) */}
-      <header className="shrink-0 flex items-center justify-between pb-2 border-b border-[#141d30]">
+      {/* 1. Header: Corner buttons have 10px margins away from screen border and >=4px from neighbors */}
+      <header className="shrink-0 flex items-center justify-between pb-2.5 pt-1 px-1 sm:px-3 border-b border-[#141d30]">
         <button
           type="button"
           onClick={onBack}
-          className="px-3 py-1.5 rounded-xl bg-[#121828] border border-[#1d273f] text-slate-300 hover:text-white hover:border-[#3debe0]/50 text-xs font-bold tracking-wider font-['Orbitron',sans-serif] active:scale-95 transition-all cursor-pointer"
+          style={{ marginLeft: 10, marginTop: 10, marginRight: 4, marginBottom: 4 }}
+          className="btn-creatyxo rounded-xl bg-[#121828] border border-[#1d273f] text-slate-200 hover:text-white hover:border-[#3debe0]/50 text-xs font-bold tracking-wider font-['Orbitron',sans-serif] active:scale-95 transition-all cursor-pointer"
         >
           BACK
         </button>
 
-        <div className="flex flex-col items-center">
-          <div className="flex items-center gap-1.5">
-            <h2 className="text-sm font-bold text-white font-['Orbitron',sans-serif] tracking-wider text-center">
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold text-white font-['Orbitron',sans-serif] tracking-wider text-center leading-normal">
               LEADERBOARD
             </h2>
             <button
               type="button"
               onClick={refreshSharedBoard}
               disabled={isRefreshing}
+              style={{ margin: 4 }}
               title="Refresh shared records from global database"
-              className="text-[#3debe0] hover:text-white p-1 rounded transition-colors cursor-pointer disabled:opacity-50"
+              className="w-8 h-8 rounded-lg bg-[#121828] border border-[#1b263d] hover:border-[#3debe0]/50 flex items-center justify-center text-[#3debe0] hover:text-white transition-all cursor-pointer disabled:opacity-50 box-border"
             >
               <svg className={`w-3.5 h-3.5 fill-current ${isRefreshing ? 'animate-spin' : ''}`} viewBox="0 0 24 24">
                 <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
@@ -108,7 +110,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
             </button>
           </div>
           <span
-            className={`text-[8px] font-bold tracking-widest font-['Orbitron',sans-serif] flex items-center gap-1 ${
+            className={`text-[8px] font-bold tracking-widest font-['Orbitron',sans-serif] flex items-center gap-1.5 mt-1 leading-normal ${
               isOnline ? 'text-emerald-400' : 'text-amber-400'
             }`}
           >
@@ -125,18 +127,19 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
           <button
             type="button"
             onClick={onOpenNameModal}
-            className="text-[10px] text-[#3debe0] hover:text-white font-bold tracking-wider font-['Orbitron',sans-serif] cursor-pointer"
+            style={{ marginRight: 10, marginTop: 10, marginLeft: 4, marginBottom: 4 }}
+            className="btn-creatyxo rounded-xl bg-[#121828] border border-[#1d273f] hover:border-[#3debe0]/50 text-xs font-bold text-[#3debe0] hover:text-white tracking-wider font-['Orbitron',sans-serif] transition-all cursor-pointer active:scale-95"
             title="Change your player name"
           >
-            CHANGE NAME
+            EDIT NAME
           </button>
         ) : (
-          <div className="w-16" />
+          <div className="w-16 mr-2" />
         )}
       </header>
 
       {/* 2. Your Rank Summary Card (Fixed, never shrinks) */}
-      <div className="shrink-0 my-2 p-2.5 rounded-xl bg-[#0e1628] border border-[#3debe0]/40 flex items-center justify-between shadow-sm">
+      <div style={{ marginLeft: 10, marginRight: 10 }} className="shrink-0 my-2 p-2.5 rounded-xl bg-[#0e1628] border border-[#3debe0]/40 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-lg bg-[#16233a] border border-[#233554] text-[#3debe0] font-black text-xs flex items-center justify-center font-['Orbitron',sans-serif]">
             {userEntry.avatarLetter}
@@ -157,7 +160,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
               </span>
             </div>
 
-            <span className="text-[10px] text-slate-400 font-['Orbitron',sans-serif] mt-0.5">
+            <span className="text-[10px] text-slate-400 font-['Orbitron',sans-serif] mt-1">
               BEST: <strong className="text-[#f6c445] font-black">{userEntry.score.toLocaleString()}</strong>
             </span>
           </div>
@@ -174,19 +177,20 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       </div>
 
       {/* 3. Search Bar */}
-      <div className="shrink-0 mb-2 relative">
+      <div className="shrink-0 mb-2.5 relative">
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search player name..."
-          className="w-full bg-[#101625] border border-[#1d273f] rounded-xl px-3.5 py-2 text-xs font-bold text-white font-['Orbitron',sans-serif] focus:outline-none focus:border-[#3debe0]/60 placeholder:text-slate-600 placeholder:font-normal"
+          style={{ paddingLeft: 0, paddingRight: 0, marginLeft: 10, marginRight: 0, marginTop: 6, marginBottom: 5 }}
+          className="h-11 w-full bg-[#101625] border border-[#1d273f] rounded-xl text-xs font-bold text-white font-['Orbitron',sans-serif] focus:outline-none focus:border-[#3debe0]/60 placeholder:text-slate-500 placeholder:font-normal"
         />
         {searchQuery && (
           <button
             type="button"
             onClick={() => setSearchQuery('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white text-[10px] font-bold cursor-pointer"
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-7 px-2.5 rounded-lg bg-[#141b2e] hover:bg-[#1a253f] border border-[#233250] text-slate-400 hover:text-white text-[10px] font-bold flex items-center justify-center cursor-pointer transition-colors leading-none m-1"
           >
             CLEAR
           </button>
@@ -194,16 +198,16 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
       </div>
 
       {/* 4. Scrollable List with Themed Scrollbar */}
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1.5 custom-scrollbar">
+      <div style={{ marginLeft: 10, marginRight: 10, marginTop: 4 }} className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1.5 custom-scrollbar">
         {filteredList.length === 0 ? (
-          <div className="py-6 flex flex-col items-center justify-center text-slate-400 gap-1.5 text-center">
+          <div className="py-8 flex flex-col items-center justify-center text-slate-400 gap-2 text-center">
             <span className="text-xs font-bold font-['Orbitron',sans-serif]">
               No player found matching "{searchQuery}"
             </span>
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="text-[10px] text-[#3debe0] hover:underline font-bold cursor-pointer"
+              className="h-8 px-4 rounded-lg bg-[#121f35] border border-[#3debe0]/40 text-xs text-[#3debe0] hover:text-white font-bold flex items-center justify-center cursor-pointer transition-colors leading-none m-1"
             >
               Reset Search
             </button>
@@ -241,7 +245,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                   </div>
 
                   {/* Name and Tag */}
-                  <div className="flex flex-col min-w-0 text-left">
+                  <div className="flex flex-col min-w-0 text-left gap-1">
                     <div className="flex items-center gap-1.5 truncate">
                       <span
                         className={`text-xs font-bold truncate font-['Orbitron',sans-serif] ${
@@ -258,7 +262,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                     </div>
 
                     <span
-                      className={`text-[8px] font-bold px-1.5 py-0.2 rounded-full border self-start ${tierStyle.bg} ${tierStyle.text} ${tierStyle.border} font-['Orbitron',sans-serif]`}
+                      className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full border self-start ${tierStyle.bg} ${tierStyle.text} ${tierStyle.border} font-['Orbitron',sans-serif]`}
                     >
                       {player.tier}
                     </span>
@@ -266,7 +270,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                 </div>
 
                 {/* Right: Score */}
-                <div className="flex flex-col items-end shrink-0 pl-2">
+                <div className="flex flex-col items-end shrink-0 pl-2 gap-0.5">
                   <span
                     className={`text-xs font-black font-['Orbitron',sans-serif] ${
                       isUser ? 'text-[#3debe0]' : 'text-[#f6c445]'
@@ -274,7 +278,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
                   >
                     {player.score.toLocaleString()}
                   </span>
-                  <span className="text-[7px] text-slate-500 font-['Orbitron',sans-serif] tracking-wider">
+                  <span className="text-[7px] text-slate-500 font-['Orbitron',sans-serif] tracking-wider mt-1">
                     BEST SCORE
                   </span>
                 </div>
@@ -284,22 +288,23 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({
         )}
 
         {/* Clean explanatory card */}
-        <div className="p-3 rounded-xl bg-[#0e1628]/50 border border-[#1b263d] text-center my-2">
+        <div style={{ marginTop: 9, marginBottom: 0 }} className="p-3 rounded-xl bg-[#0e1628]/50 border border-[#1b263d] text-center">
           <span className="text-[10px] text-emerald-400 font-bold font-['Orbitron',sans-serif] block">
             GLOBAL LIVE LEADERBOARD
           </span>
-          <span className="text-[9px] text-slate-400 font-['Orbitron',sans-serif] mt-0.5 block">
+          <span className="text-[9px] text-slate-400 font-['Orbitron',sans-serif] mt-1 block">
             Shared across all players & devices. Every player's record is automatically synced here.
           </span>
         </div>
       </div>
 
-      {/* 5. Fixed Bottom Footer */}
-      <footer className="shrink-0 pt-2 pb-1 border-t border-[#141d30] mt-auto">
+      {/* 5. Fixed Bottom Footer: 10px clearance from screen border */}
+      <footer className="shrink-0 pt-3 pb-2.5 px-3 sm:px-4 border-t border-[#141d30] mt-auto mb-2.5">
         <button
           type="button"
           onClick={onPlayGame}
-          className="w-full py-3 rounded-xl bg-[#3debe0] hover:bg-[#34d1c6] text-[#070a11] font-black tracking-widest text-xs font-['Orbitron',sans-serif] active:scale-95 transition-all shadow-md cursor-pointer"
+          style={{ marginLeft: 10, marginRight: 10 }}
+          className="btn-creatyxo w-full rounded-2xl bg-[#3debe0] hover:bg-[#34d1c6] text-[#070a11] font-black tracking-widest text-xs sm:text-sm font-['Orbitron',sans-serif] active:scale-95 transition-all shadow-[0_0_20px_rgba(61,235,224,0.35)] cursor-pointer"
         >
           PLAY NOW
         </button>

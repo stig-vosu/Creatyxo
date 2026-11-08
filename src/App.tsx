@@ -35,7 +35,6 @@ import { HomeScreen } from './components/HomeScreen';
 import { LeaderboardScreen } from './components/LeaderboardScreen';
 import { NameSetupModal } from './components/NameSetupModal';
 import { AudioSettingsModal } from './components/AudioSettingsModal';
-import { TutorialGuideOverlay } from './components/TutorialGuideOverlay';
 import {
   PlayerProfile,
   generateRandomName,
@@ -44,29 +43,11 @@ import {
   savePlayerToLeaderboard,
 } from './game/leaderboard';
 
-// Tutorial Interactive Testing Configurations: Spawn exactly 1 piece in slot 1 (center)
-const TUTORIAL_STEP1_PIECES: (PieceShape | null)[] = [
-  null,
-  { id: 'tut-cube', name: '2x2 Square', matrix: [[1, 1], [1, 1]], color: 'cyan' },
-  null,
-];
-
-const TUTORIAL_STEP2_PIECES: (PieceShape | null)[] = [
-  null,
-  { id: 'tut-h2', name: '2x1 Line', matrix: [[1, 1]], color: 'cyan' },
-  null,
-];
-
-function createTutorialStep2Grid(): GridState {
-  const g = createEmptyGrid();
-  // Fill row 6 across except columns 3 and 4 for an authentic line-clearing feeling
-  const colors: BlockColor[] = ['orange', 'rose', 'purple', 'cyan', 'cyan', 'green', 'gold', 'blue'];
-  for (let c = 0; c < 8; c++) {
-    if (c !== 3 && c !== 4) {
-      g[6][c] = colors[c];
-    }
-  }
-  return g;
+export interface FlyingClearMessage {
+  id: string;
+  multiplier: number;
+  points: number;
+  accentColor: string;
 }
 
 export default function App() {
@@ -110,15 +91,11 @@ export default function App() {
     return false;
   });
 
-  // Interactive In-Game Tutorial State (test dragging and row clears)
-  const [isTutorialActive, setIsTutorialActive] = useState<boolean>(false);
-  const [tutorialStep, setTutorialStep] = useState<1 | 2 | 3>(1);
-  const [hasSeenTutorial, setHasSeenTutorial] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('creatyxo_tutorial_seen') === 'true';
-    }
-    return false;
-  });
+  // Visual effects & Flying floating combo score messages
+  const [flyingMessages, setFlyingMessages] = useState<FlyingClearMessage[]>([]);
+  const [clearingRows, setClearingRows] = useState<number[]>([]);
+  const [clearingCols, setClearingCols] = useState<number[]>([]);
+  const [isBoardShaking, setIsBoardShaking] = useState<boolean>(false);
 
   // Game Board State (8x8)
   const [grid, setGrid] = useState<GridState>(() => createEmptyGrid());
@@ -258,11 +235,6 @@ export default function App() {
   const draggingRef = useRef<DraggingPieceState | null>(null);
   draggingRef.current = dragging;
 
-  const isTutorialActiveRef = useRef<boolean>(false);
-  isTutorialActiveRef.current = isTutorialActive;
-  const tutorialStepRef = useRef<1 | 2 | 3>(1);
-  tutorialStepRef.current = tutorialStep;
-
   const gridRef = useRef<GridState>(grid);
   gridRef.current = grid;
 
@@ -352,68 +324,12 @@ export default function App() {
     setActiveScreen('ranking');
   };
 
-  // Start interactive testing tutorial
-  const startInteractiveTutorial = useCallback(() => {
-    if (musicEnabled) {
-      startBackgroundMusic(true);
-    }
-    setIsTutorialActive(true);
-    setTutorialStep(1);
-    setGrid(createEmptyGrid());
-    setTray(TUTORIAL_STEP1_PIECES);
-    setScore(0);
-    setCombo(0);
-    setIsGameOver(false);
-    setIsPaused(false);
-    setActiveScreen('game');
-  }, [musicEnabled]);
-
-  // Select specific tutorial step (supports interactive floating tabs)
-  const handleSelectTutorialStep = useCallback((targetStep: 1 | 2 | 3) => {
-    setTutorialStep(targetStep);
-    if (targetStep === 1) {
-      setGrid(createEmptyGrid());
-      setTray(TUTORIAL_STEP1_PIECES);
-    } else if (targetStep === 2) {
-      setGrid(createTutorialStep2Grid());
-      setTray(TUTORIAL_STEP2_PIECES);
-    } else {
-      setTray([null, null, null]);
-    }
-  }, []);
-
-  // Start game flow with first-time interactive testing tutorial trigger
+  // Start game flow directly
   const handleStartGame = () => {
     if (musicEnabled) {
       startBackgroundMusic(true);
     }
-    if (!hasSeenTutorial) {
-      startInteractiveTutorial();
-    } else {
-      setActiveScreen('game');
-    }
-  };
-
-  const handleFinishTutorial = () => {
-    setIsTutorialActive(false);
-    setHasSeenTutorial(true);
-    try {
-      localStorage.setItem('creatyxo_tutorial_seen', 'true');
-    } catch {
-      // ignore
-    }
-    resetGame();
-  };
-
-  const handleSkipTutorial = () => {
-    setIsTutorialActive(false);
-    setHasSeenTutorial(true);
-    try {
-      localStorage.setItem('creatyxo_tutorial_seen', 'true');
-    } catch {
-      // ignore
-    }
-    resetGame();
+    setActiveScreen('game');
   };
 
   /**
@@ -432,7 +348,7 @@ export default function App() {
       const gapPx = secondCell ? secondCell.getBoundingClientRect().left - rect.right : 4;
       return {
         cellPx: rect.width,
-        gapPx: Math.max(2, Math.round(gapPx)),
+        gapPx: Math.max(4, Math.round(gapPx)),
         originLeft: rect.left,
         originTop: rect.top,
       };
@@ -590,6 +506,9 @@ export default function App() {
           });
 
           setClearingCells(cellsMarked);
+          setClearingRows(rowsToClear);
+          setClearingCols(colsToClear);
+          setIsBoardShaking(true);
 
           rowsToClear.forEach((r) => {
             for (let c = 0; c < 8; c++) {
@@ -607,47 +526,63 @@ export default function App() {
           setMaxCombo((prev) => Math.max(prev, nextCombo));
           setTotalLinesCleared((prev) => prev + linesCleared);
 
-          playClearSound(nextCombo, soundEnabled);
+          playClearSound(nextCombo, linesCleared, soundEnabled);
 
-          let lineMultiplier = 150;
-          if (linesCleared === 2) lineMultiplier = 400;
-          else if (linesCleared === 3) lineMultiplier = 750;
-          else if (linesCleared >= 4) lineMultiplier = 1300;
+          // Rich Multiplier Calculations:
+          // 1. Line Clear Multiplier: 1 line = 150 pts, 2 lines = 450 pts (2x), 3 lines = 900 pts (3.5x), 4+ lines = 1600 pts (5x)
+          let baseLinePoints = 150;
+          let clearTitle = 'SINGLE CLEAR';
+          if (linesCleared === 2) {
+            baseLinePoints = 450;
+            clearTitle = 'DOUBLE CLEAR! 2x';
+          } else if (linesCleared === 3) {
+            baseLinePoints = 900;
+            clearTitle = 'TRIPLE BLAST! 3x';
+          } else if (linesCleared >= 4) {
+            baseLinePoints = 1600;
+            clearTitle = 'MEGA CRUSH! 5x';
+          }
 
-          const bonusPoints = lineMultiplier * (nextCombo + 1);
-          setScore((prev) => prev + basePoints + bonusPoints);
+          // 2. Consecutive Combo Multiplier: 1x, 1.5x, 2.0x, 2.5x, 3.0x, etc.
+          const comboMultiplier = 1 + Math.max(0, nextCombo - 1) * 0.5;
+          const clearScore = Math.round(baseLinePoints * comboMultiplier);
+          const totalPointsGained = basePoints + clearScore;
+
+          setScore((prev) => prev + totalPointsGained);
+
+          // 3. Spawn Flying Message showing ONLY the multiplier (1x, 2x, 3x...) and points number
+          const msgId = `${Date.now()}-${Math.random()}`;
+          const currentMultiplier = Math.max(1, linesCleared, nextCombo);
+          const newMsg: FlyingClearMessage = {
+            id: msgId,
+            multiplier: currentMultiplier,
+            points: totalPointsGained,
+            accentColor:
+              currentMultiplier >= 3
+                ? '#f43f5e'
+                : currentMultiplier === 2
+                ? '#f6c445'
+                : '#3debe0',
+          };
+
+          setFlyingMessages((prev) => [...prev.slice(-2), newMsg]);
+          setTimeout(() => {
+            setFlyingMessages((prev) => prev.filter((m) => m.id !== msgId));
+          }, 1400);
 
           setTimeout(() => {
             setClearingCells(new Set());
-          }, 240);
+            setClearingRows([]);
+            setClearingCols([]);
+          }, 380);
+
+          setTimeout(() => {
+            setIsBoardShaking(false);
+          }, 360);
         } else {
           setCombo(0);
           setScore((prev) => prev + basePoints);
           playPlaceSound(soundEnabled);
-        }
-
-        // Tutorial Interactive Progression Handling
-        if (isTutorialActiveRef.current) {
-          setGrid(newGrid);
-          setTray([null, null, null]);
-
-          if (tutorialStepRef.current === 1) {
-            // Player tested placing a block -> advance to row-clearing test
-            setTimeout(() => {
-              setTutorialStep(2);
-              setGrid(createTutorialStep2Grid());
-              setTray(TUTORIAL_STEP2_PIECES);
-            }, 550);
-          } else if (tutorialStepRef.current === 2) {
-            // Player tested line clear -> advance to tutorial completion
-            setTimeout(() => {
-              setTutorialStep(3);
-            }, 700);
-          }
-
-          setDragging(null);
-          setPreviewPlacement(null);
-          return;
         }
 
         // If tray is empty, spawn 3 new pieces
@@ -738,7 +673,7 @@ export default function App() {
 
     return (
       <div
-        className="grid gap-0.5 pointer-events-none select-none transition-transform"
+        className="grid gap-1 pointer-events-none select-none transition-transform"
         style={{
           gridTemplateRows: `repeat(${rows}, ${cellPx}px)`,
           gridTemplateColumns: `repeat(${cols}, ${cellPx}px)`,
@@ -761,7 +696,7 @@ export default function App() {
     );
   };
 
-  // Render dragging piece matching the board square size 1:1
+  // Render dragging piece matching the board square size 1:1 and clamped >= 10px from screen border
   const renderFloatingDraggingPiece = () => {
     if (!dragging) return null;
     const { piece, pointerX, pointerY, isTouch } = dragging;
@@ -770,14 +705,24 @@ export default function App() {
     const cols = piece.matrix[0].length;
 
     const { cellPx, gapPx } = getBoardCellMetrics();
+    const effectiveGap = Math.max(4, gapPx);
+    const pieceW = cols * cellPx + (cols - 1) * effectiveGap;
+    const pieceH = rows * cellPx + (rows - 1) * effectiveGap;
+    const halfW = pieceW / 2;
+    const halfH = pieceH / 2;
     const touchOffset = isTouch ? 75 : 0;
+    const targetY = pointerY - touchOffset;
+
+    // Guarantee dragging block is at least 10px away from the screen border
+    const clampedX = Math.max(10 + halfW, Math.min(window.innerWidth - 10 - halfW, pointerX));
+    const clampedY = Math.max(10 + halfH, Math.min(window.innerHeight - 10 - halfH, targetY));
 
     return (
       <div
         className="fixed pointer-events-none z-50 select-none -translate-x-1/2 -translate-y-1/2"
         style={{
-          left: `${pointerX}px`,
-          top: `${pointerY - touchOffset}px`,
+          left: `${clampedX}px`,
+          top: `${clampedY}px`,
         }}
       >
         <div
@@ -785,7 +730,7 @@ export default function App() {
           style={{
             gridTemplateRows: `repeat(${rows}, ${cellPx}px)`,
             gridTemplateColumns: `repeat(${cols}, ${cellPx}px)`,
-            gap: `${gapPx}px`,
+            gap: `${effectiveGap}px`,
           }}
         >
           {piece.matrix.map((row, r) =>
@@ -807,7 +752,7 @@ export default function App() {
   };
 
   return (
-    <div className="w-full h-full h-[100dvh] max-h-[100dvh] bg-[#070a11] text-slate-100 flex flex-col items-center justify-center select-none font-['Orbitron',sans-serif] overflow-hidden p-0 sm:p-3 touch-none">
+    <div className="w-full h-full h-[100dvh] max-h-[100dvh] bg-[#070a11] text-slate-100 flex flex-col items-center justify-center select-none font-['Orbitron',sans-serif] overflow-hidden p-3 sm:p-5 touch-none">
       {/* Name Setup / Callsign Modal */}
       <NameSetupModal
         isOpen={isNameModalOpen}
@@ -831,13 +776,9 @@ export default function App() {
         onClose={() => setIsAudioSettingsOpen(false)}
       />
 
-      {/* Main Container */}
+      {/* Main Container: Well inset from screen edges on all devices */}
       <main
-        className={`w-full max-w-[420px] h-full max-h-full sm:max-h-[820px] flex flex-col mx-auto relative bg-[#070a11] overflow-hidden ${
-          activeScreen === 'ranking'
-            ? 'px-4 sm:px-5 py-2.5'
-            : 'px-6 sm:px-8 pt-3 pb-6 justify-between'
-        }`}
+        className="w-full max-w-[440px] h-full sm:h-[840px] sm:max-h-[96vh] rounded-2xl sm:rounded-3xl border border-[#1b263d] shadow-2xl flex flex-col mx-auto relative bg-[#070a11] overflow-hidden p-3.5 sm:p-6 justify-between"
       >
         {/* VIEW 1: HOME SCREEN */}
         {activeScreen === 'home' && (
@@ -853,7 +794,6 @@ export default function App() {
             onStartGame={handleStartGame}
             onOpenLeaderboard={() => openLeaderboard('home')}
             onOpenNameModal={() => setIsNameModalOpen(true)}
-            onOpenTutorial={startInteractiveTutorial}
           />
         )}
 
@@ -871,182 +811,107 @@ export default function App() {
         {/* VIEW 3: GAMEPLAY SCREEN */}
         {activeScreen === 'game' && (
           <>
-            {/* Interactive Tutorial Guide Overlay with Traveling Ghost Blocks */}
-            {isTutorialActive && (
-              <TutorialGuideOverlay
-                step={tutorialStep}
-                targetR={tutorialStep === 1 ? 3 : 6}
-                targetC={tutorialStep === 1 ? 3 : 3}
-                piece={
-                  tutorialStep === 1
-                    ? (TUTORIAL_STEP1_PIECES[1] as PieceShape)
-                    : tutorialStep === 2
-                    ? (TUTORIAL_STEP2_PIECES[1] as PieceShape)
-                    : null
-                }
-                traySlotIndex={1}
-                boardElement={boardRef.current}
-                isDragging={dragging !== null}
-                onSelectStep={handleSelectTutorialStep}
-                onSkip={handleSkipTutorial}
-                onStartPlaying={handleFinishTutorial}
-              />
-            )}
-            {/* Top Header Section */}
-            <header className="flex flex-col gap-3 w-full shrink-0">
-              {/* Top Bar: Home, Title, Music & Sound Controls */}
-              <div className="flex items-center justify-between">
-                {/* Home Return Button */}
+            {/* Top Header Section: Corner buttons have 10px margin away from screen border */}
+            <header className="flex flex-col gap-3 w-full shrink-0 px-1 sm:px-2 pt-1">
+              {/* Top Bar: Home, Title, Settings */}
+              <div className="flex items-center justify-between w-full">
+                {/* Home Return Button (Top Left Corner: 10px margin from screen border, 4px from neighbors) */}
                 <button
                   type="button"
                   aria-label="Return to Home"
                   onClick={() => setActiveScreen('home')}
-                  style={{ marginRight: 0, marginLeft: 39, marginTop: 10 }}
-                  className="w-10 h-10 rounded-xl bg-[#121828] border border-[#1b263d] flex items-center justify-center text-slate-300 hover:text-[#3debe0] hover:border-[#3debe0]/40 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
+                  style={{ marginLeft: 10, marginTop: 10, marginRight: 4, marginBottom: 4 }}
+                  className="btn-creatyxo-icon rounded-xl bg-[#121828] border border-[#1b263d] text-slate-300 hover:text-[#3debe0] hover:border-[#3debe0]/50 active:scale-95 transition-all cursor-pointer shadow-sm shrink-0"
                   title="Main Menu"
                 >
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                     <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
                   </svg>
                 </button>
 
                 <h1
-                  style={{ marginTop: 10 }}
-                  className="text-[26px] sm:text-[32px] tracking-wide text-[#3debe0] uppercase font-['Black_Ops_One',sans-serif] drop-shadow-[0_0_16px_rgba(61,235,224,0.35)] text-center px-1 leading-none select-none cursor-pointer"
+                  className="text-xl sm:text-2xl tracking-wider text-[#3debe0] uppercase font-['Black_Ops_One',sans-serif] drop-shadow-[0_0_16px_rgba(61,235,224,0.35)] text-center px-2 select-none cursor-pointer flex items-center justify-center"
                   onClick={() => setActiveScreen('home')}
                   title="Main Menu"
                 >
                   CREATYXO
                 </h1>
 
-                {/* Music & Sound Controls */}
-                <div
+                {/* Settings Button (Top Right Corner: 10px margin from screen border, 4px from neighbors) */}
+                <button
+                  type="button"
+                  aria-label="Settings, Sound & Music"
+                  onClick={() => setIsAudioSettingsOpen(true)}
                   style={{
-                    paddingTop: 0,
-                    paddingLeft: 0,
-                    marginLeft: 0,
+                    padding: 8,
+                    marginLeft: 4,
+                    marginRight: 10,
                     marginTop: 10,
-                    marginBottom: 0,
-                    marginRight: 39,
+                    marginBottom: 4,
                   }}
-                  className="flex items-center gap-1.5 shrink-0"
+                  className="btn-creatyxo-icon rounded-xl border border-[#1b263d] bg-[#121828] text-slate-400 hover:text-[#3debe0] hover:border-[#3debe0]/50 cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+                  title="Settings (Music & Sound)"
                 >
-                  {/* Audio Controls: Sliders Modal Button, Music & SFX */}
-                  <button
-                    type="button"
-                    aria-label="Adjust sound and music volume"
-                    onClick={() => setIsAudioSettingsOpen(true)}
-                    className="w-9 h-9 rounded-xl border border-[#1b263d] bg-[#121828] text-slate-400 hover:text-[#3debe0] hover:border-[#3debe0]/50 flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-sm"
-                    title="Audio Volume Settings"
-                  >
-                    <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                      <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z" />
-                    </svg>
-                  </button>
-
-                  {/* Music Toggle */}
-                  <button
-                    type="button"
-                    aria-label={musicEnabled ? 'Turn music off' : 'Turn music on'}
-                    onClick={toggleMusic}
-                    className={`w-9 h-9 rounded-xl border flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-sm ${
-                      musicEnabled
-                        ? 'bg-[#121828] border-[#3debe0]/50 text-[#3debe0]'
-                        : 'bg-[#121828] border-[#1b263d] text-slate-500'
-                    }`}
-                    title={musicEnabled ? 'Chill Music: ON' : 'Chill Music: OFF'}
-                  >
-                    <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                    </svg>
-                  </button>
-
-                  {/* SFX Toggle */}
-                  <button
-                    type="button"
-                    aria-label={soundEnabled ? 'Mute sound' : 'Unmute sound'}
-                    onClick={toggleSound}
-                    className={`w-9 h-9 rounded-xl border flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-sm ${
-                      soundEnabled
-                        ? 'bg-[#121828] border-[#3debe0]/50 text-[#3debe0]'
-                        : 'bg-[#121828] border-[#1b263d] text-slate-500'
-                    }`}
-                    title={soundEnabled ? 'SFX: ON' : 'SFX: OFF'}
-                  >
-                    {soundEnabled ? (
-                      <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                        <path d="M14 3.23v17.54a1 1 0 0 1-1.6.8L6.7 16H3a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1h3.7l5.7-5.57a1 1 0 0 1 1.6.8zm4.5 5.27a1 1 0 0 1 1.41.09A7.95 7.95 0 0 1 22 12c0 2.22-.9 4.23-2.35 5.68a1 1 0 1 1-1.42-1.41A5.96 5.96 0 0 0 20 12c0-1.66-.67-3.17-1.76-4.27a1 1 0 0 1 .26-1.23z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                        <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27l4.73 4.73H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
+                  <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                    <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                  </svg>
+                </button>
               </div>
 
-              {/* Score Cards Row */}
+              {/* Score Cards Row: 12px gap */}
               <div className="grid grid-cols-2 gap-3 w-full">
                 {/* Score Card */}
                 <div
-                  style={{
-                    paddingTop: 0,
-                    paddingLeft: 12,
-                    paddingRight: 12,
-                    marginLeft: 37,
-                    marginRight: -2,
-                    marginBottom: 0,
-                    marginTop: 0,
-                  }}
-                  className="bg-[#101625] border border-[#1b263d] rounded-2xl py-2.5 sm:py-3 flex flex-col justify-between shadow-sm"
+                  style={{ marginLeft: 15, marginRight: 0 }}
+                  className="bg-[#101625] border border-[#1b263d] rounded-2xl px-3.5 py-2.5 flex flex-col justify-center gap-1 shadow-sm min-h-[58px]"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-slate-400 tracking-wider font-['Orbitron',sans-serif]">
+                  <div style={{ paddingLeft: 7 }} className="flex items-center justify-between">
+                    <span className="text-[9.5px] font-bold text-slate-400 tracking-wider font-['Orbitron',sans-serif] leading-normal">
                       SCORE
                     </span>
                     {combo > 1 ? (
-                      <span className="text-[9px] font-bold text-[#f43f5e] bg-[#2d1523] border border-[#4d1f35] px-2 py-0.5 rounded-full font-['Orbitron',sans-serif]">
+                      <span
+                        style={{ paddingRight: 0, paddingLeft: 0, marginLeft: 0, marginRight: 9 }}
+                        className="text-[8px] font-bold text-[#f43f5e] bg-[#2d1523] border border-[#4d1f35] py-0.5 rounded-full font-['Orbitron',sans-serif] leading-normal"
+                      >
                         COMBO {combo}x
                       </span>
                     ) : (
-                      <span className="text-[9px] font-bold text-slate-500 bg-[#141b2e] px-2 py-0.5 rounded-full font-['Orbitron',sans-serif]">
+                      <span
+                        style={{ paddingRight: 0, paddingLeft: 0, marginLeft: 0, marginRight: 9 }}
+                        className="text-[8px] font-bold text-slate-500 bg-[#141b2e] py-0.5 rounded-full font-['Orbitron',sans-serif] leading-normal"
+                      >
                         1x
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 text-xl sm:text-2xl font-black text-white tracking-wide font-['Orbitron',sans-serif]">
+                  <div
+                    style={{ marginLeft: 0, paddingLeft: 5 }}
+                    className="text-lg sm:text-xl font-black text-white tracking-wide font-['Orbitron',sans-serif] leading-normal tabular-nums"
+                  >
                     {score.toLocaleString()}
                   </div>
                 </div>
 
                 {/* Best Score Card */}
                 <div
-                  style={{ marginRight: 39, marginLeft: -4 }}
-                  className="bg-[#101625] border border-[#1b263d] rounded-2xl px-3.5 py-2.5 sm:px-4 sm:py-3 flex flex-col justify-between shadow-sm"
+                  style={{ paddingRight: 10 }}
+                  className="bg-[#101625] border border-[#1b263d] rounded-2xl px-3.5 py-2.5 flex flex-col justify-center gap-1 shadow-sm min-h-[58px]"
                 >
-                  <div
-                    style={{
-                      marginLeft: 0,
-                      paddingLeft: 0,
-                      paddingTop: 0,
-                      marginRight: 0,
-                    }}
-                    className="flex items-center justify-between"
-                  >
+                  <div className="flex items-center justify-between">
                     <span
-                      style={{ marginLeft: 6 }}
-                      className="text-[10px] font-bold text-slate-400 tracking-wider font-['Orbitron',sans-serif]"
+                      style={{ paddingLeft: 8 }}
+                      className="text-[9.5px] font-bold text-slate-400 tracking-wider font-['Orbitron',sans-serif] leading-normal"
                     >
                       BEST
                     </span>
-                    <span className="text-[9px] text-slate-500 font-bold font-['Orbitron',sans-serif]">
+                    <span className="text-[9.5px] text-slate-500 font-bold font-['Orbitron',sans-serif] leading-normal">
                       #{userRank}
                     </span>
                   </div>
                   <div
-                    style={{ marginLeft: 6 }}
-                    className="mt-1 text-xl sm:text-2xl font-black text-[#f6c445] tracking-wide font-['Orbitron',sans-serif]"
+                    style={{ paddingLeft: 5 }}
+                    className="text-lg sm:text-xl font-black text-[#f6c445] tracking-wide font-['Orbitron',sans-serif] leading-normal tabular-nums"
                   >
                     {bestScore.toLocaleString()}
                   </div>
@@ -1054,127 +919,163 @@ export default function App() {
               </div>
             </header>
 
-            {/* Centered Board Area */}
-            <section
-              aria-label="Game Board"
-              className="w-full flex-1 flex items-center justify-center my-1 sm:my-2 min-h-0"
-            >
-              <div
-                ref={boardRef}
-                style={{
-                  width: '100%',
-                  maxWidth: 310,
-                  aspectRatio: '1 / 1',
-                  backgroundColor: '#090d16',
-                  padding: 10,
-                  borderRadius: 18,
-                  border: '1px solid #162035',
-                  boxShadow: 'inset 0 2px 10px rgba(0, 0, 0, 0.7)',
-                }}
-                className="relative select-none touch-none"
+            {/* Center Playfield: Game Board + Block Spawning Tray */}
+            <div className="w-full flex-1 flex flex-col items-center justify-center gap-3 sm:gap-4 my-auto min-h-0">
+              {/* Game Board */}
+              <section
+                aria-label="Game Board"
+                className="w-full flex items-center justify-center"
               >
-                <div className="grid grid-cols-8 grid-rows-8 gap-1 sm:gap-1.5 w-full h-full">
-                  {grid.map((row, r) =>
-                    row.map((cellColor, c) => {
-                      const isPreview = isPreviewCell(r, c);
-                      const isClearing = clearingCells.has(`${r},${c}`);
-                      const activeColor: BlockColor | null = isPreview
-                        ? dragging?.piece.color || null
-                        : cellColor;
+                <div
+                  ref={boardRef}
+                  style={{
+                    width: '100%',
+                    maxWidth: 310,
+                    aspectRatio: '1 / 1',
+                    backgroundColor: '#090d16',
+                    padding: 10,
+                    borderRadius: 18,
+                    border: '1px solid #162035',
+                    boxShadow: 'inset 0 2px 10px rgba(0, 0, 0, 0.7)',
+                  }}
+                  className={`relative select-none touch-none ${isBoardShaking ? 'animate-board-shake' : ''}`}
+                >
+                  <div className="grid grid-cols-8 grid-rows-8 gap-1 sm:gap-1.5 w-full h-full relative">
+                    {grid.map((row, r) =>
+                      row.map((cellColor, c) => {
+                        const isPreview = isPreviewCell(r, c);
+                        const isClearing = clearingCells.has(`${r},${c}`);
+                        const activeColor: BlockColor | null = isPreview
+                          ? dragging?.piece.color || null
+                          : cellColor;
 
-                      const theme = activeColor ? COLOR_THEMES[activeColor] : null;
+                        const theme = activeColor ? COLOR_THEMES[activeColor] : null;
 
-                      return (
-                        <div
-                          key={`${r}-${c}`}
-                          data-r={r}
-                          data-c={c}
-                          className={`w-full h-full rounded-[5px] sm:rounded-md flex items-center justify-center transition-all duration-100 ${
-                            theme
-                              ? isPreview
-                                ? `${theme.preview} scale-[0.98] border animate-pulse`
-                                : isClearing
-                                ? 'bg-white scale-110 shadow-[0_0_18px_#ffffff] z-10 transition-transform'
-                                : `${theme.solid} ${theme.shadow} border ${theme.border}`
-                              : 'bg-[#101625] border border-[#172034]'
-                          }`}
-                        />
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </section>
+                        return (
+                          <div
+                            key={`${r}-${c}`}
+                            data-r={r}
+                            data-c={c}
+                            className={`w-full h-full rounded-[5px] sm:rounded-md flex items-center justify-center transition-all duration-100 ${
+                              isClearing
+                                ? 'animate-cell-blast z-20'
+                                : theme
+                                ? isPreview
+                                  ? `${theme.preview} scale-[0.98] border animate-pulse`
+                                  : `${theme.solid} ${theme.shadow} border ${theme.border}`
+                                : 'bg-[#101625] border border-[#172034]'
+                            }`}
+                          />
+                        );
+                      })
+                    )}
+                  </div>
 
-            {/* Block Spawn Area (Piece Tray) */}
-            <section aria-label="Piece Tray" className="w-full shrink-0 my-1 sm:my-2">
-              <div
-                style={{
-                  marginLeft: 0,
-                  marginTop: 0,
-                  marginBottom: 7,
-                  paddingLeft: 39,
-                  paddingRight: 39,
-                }}
-                className="grid grid-cols-3 gap-3 w-full"
-              >
-                {tray.map((piece, slotIdx) => {
-                  const isCurrentlyDragging = dragging?.trayIndex === slotIdx;
-
-                  return (
+                  {/* Laser Beams sweeping across cleared Rows */}
+                  {clearingRows.map((r) => (
                     <div
-                      key={slotIdx}
-                      data-tray-slot={slotIdx}
+                      key={`laser-r-${r}`}
+                      className="absolute left-2.5 right-2.5 pointer-events-none z-30 animate-laser-row h-7 rounded-sm bg-gradient-to-r from-transparent via-white to-transparent shadow-[0_0_28px_#3debe0]"
                       style={{
-                        height: 80,
-                        borderRadius: 16,
-                        backgroundColor: '#101625',
-                        border: '1px solid #192237',
+                        top: `calc(${r * 12.5}% + 10px)`,
+                        transformOrigin: 'left center',
                       }}
-                      className="flex items-center justify-center relative touch-none select-none transition-transform active:scale-95 cursor-grab"
-                      onPointerDown={(e) => {
-                        if (piece) handlePointerDownPiece(e, piece, slotIdx);
-                      }}
-                    >
-                      {piece && !isCurrentlyDragging && renderMiniPiece(piece)}
-                      {!piece && (
-                        <span className="w-2 h-2 rounded-full bg-[#192237]" />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+                    />
+                  ))}
 
-            {/* Bottom Navigation */}
+                  {/* Laser Beams sweeping across cleared Columns */}
+                  {clearingCols.map((c) => (
+                    <div
+                      key={`laser-c-${c}`}
+                      className="absolute top-2.5 bottom-2.5 pointer-events-none z-30 animate-laser-col w-7 rounded-sm bg-gradient-to-b from-transparent via-white to-transparent shadow-[0_0_28px_#3debe0]"
+                      style={{
+                        left: `calc(${c * 12.5}% + 10px)`,
+                        transformOrigin: 'center top',
+                      }}
+                    />
+                  ))}
+
+                  {/* Flying Floating Score & Multiplier Popups - Pure sharp typography, zero box or border */}
+                  {flyingMessages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className="absolute left-1/2 top-1/2 pointer-events-none z-40 animate-flying-score flex flex-col items-center justify-center text-center select-none"
+                    >
+                      <span
+                        className="text-2xl sm:text-3xl font-black font-['Orbitron',sans-serif] tracking-wider leading-none"
+                        style={{
+                          color: msg.accentColor,
+                          textShadow: `0 2px 5px rgba(0,0,0,0.95), 0 0 10px rgba(0,0,0,0.85), 0 0 16px ${msg.accentColor}`,
+                        }}
+                      >
+                        {msg.multiplier}x
+                      </span>
+                      <span
+                        className="text-xl sm:text-2xl font-black text-white font-['Orbitron',sans-serif] tracking-wide leading-tight tabular-nums mt-0.5"
+                        style={{
+                          textShadow: '0 2px 5px rgba(0,0,0,0.95), 0 0 10px rgba(0,0,0,0.85), 0 0 14px rgba(255,255,255,0.7)',
+                        }}
+                      >
+                        +{msg.points}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Block Spawn Area (Piece Tray) */}
+              <section aria-label="Piece Tray" className="w-full flex items-center justify-center">
+                <div className="grid grid-cols-3 gap-3 w-full max-w-[310px]">
+                  {tray.map((piece, slotIdx) => {
+                    const isCurrentlyDragging = dragging?.trayIndex === slotIdx;
+
+                    return (
+                      <div
+                        key={slotIdx}
+                        data-tray-slot={slotIdx}
+                        style={{
+                          height: 80,
+                          borderRadius: 16,
+                          backgroundColor: '#101625',
+                          border: '1px solid #192237',
+                        }}
+                        className="flex items-center justify-center relative touch-none select-none transition-transform active:scale-95 cursor-grab hover:border-[#223150]"
+                        onPointerDown={(e) => {
+                          if (piece) handlePointerDownPiece(e, piece, slotIdx);
+                        }}
+                      >
+                        {piece && !isCurrentlyDragging && renderMiniPiece(piece)}
+                        {!piece && (
+                          <span className="w-2 h-2 rounded-full bg-[#192237]" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+
+            {/* Bottom Navigation: Inset 10px from screen border with at least 4px separation between elements */}
             <nav
-              style={{
-                marginLeft: 0,
-                paddingLeft: 0,
-                paddingTop: 18,
-                marginTop: 17,
-                paddingBottom: 18,
-                paddingRight: 0,
-                marginBottom: 17,
-              }}
-              className="flex items-center justify-around border-t border-[#141d30] shrink-0"
+              className="w-full flex items-center justify-around border-t border-[#141d30] pt-2 pb-2 px-2 sm:px-4 shrink-0 gap-2 mb-2.5"
               aria-label="Navigation"
             >
-              {/* Play Tab (Active) */}
+              {/* Play Tab (Bottom Left Corner: 10px margin from screen border) */}
               <button
                 type="button"
                 onClick={() => setActiveScreen('game')}
-                className="flex flex-col items-center gap-1 text-[#3debe0] cursor-pointer"
+                style={{ marginLeft: 10, marginBottom: 10, marginRight: 4, marginTop: 2 }}
+                className="flex-1 max-w-[88px] min-h-[44px] py-1 px-1.5 rounded-xl flex flex-col items-center justify-center text-center gap-1.5 text-[#3debe0] cursor-pointer hover:bg-[#142036]/50 transition-colors box-border"
               >
-                <div className="w-9 h-9 rounded-xl bg-[#142236] flex items-center justify-center">
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <div className="w-5 h-5 rounded-lg bg-[#142236] flex items-center justify-center shrink-0">
+                  <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
                     <rect x="3" y="3" width="7" height="7" rx="1.5" />
                     <rect x="14" y="3" width="7" height="7" rx="1.5" />
                     <rect x="3" y="14" width="7" height="7" rx="1.5" />
                     <rect x="14" y="14" width="7" height="7" rx="1.5" />
                   </svg>
                 </div>
-                <span className="text-[9px] font-bold tracking-wider font-['Orbitron',sans-serif]">
+                <span className="text-[9px] font-bold tracking-wider font-['Orbitron',sans-serif] leading-normal text-center">
                   PLAY
                 </span>
               </button>
@@ -1183,48 +1084,33 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => openLeaderboard('game')}
-                className="flex flex-col items-center gap-1 text-slate-400 hover:text-[#3debe0] cursor-pointer active:scale-95 transition-all"
+                style={{ marginBottom: 10, marginLeft: 4, marginRight: 4, marginTop: 2 }}
+                className="flex-1 max-w-[88px] min-h-[44px] py-1 px-1.5 rounded-xl flex flex-col items-center justify-center text-center gap-1.5 text-slate-400 hover:text-[#3debe0] cursor-pointer hover:bg-[#142036]/50 active:scale-95 transition-all box-border"
                 title="View Leaderboard"
               >
-                <div className="w-9 h-9 flex items-center justify-center">
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                  <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
                     <path d="M5 19h3v-6H5v6zm6 0h3V5h-3v14zm6 0h3v-9h-3v9z" />
                   </svg>
                 </div>
-                <span className="text-[9px] font-bold tracking-wider font-['Orbitron',sans-serif]">
+                <span className="text-[9px] font-bold tracking-wider font-['Orbitron',sans-serif] leading-normal text-center">
                   RANK
                 </span>
               </button>
 
-              {/* Boosts / Reroll Tab */}
-              <button
-                type="button"
-                onClick={() => setTray(getRandomPieces(3, grid))}
-                className="flex flex-col items-center gap-1 text-slate-400 hover:text-[#3debe0] cursor-pointer active:scale-95 transition-all"
-                title="Reroll tray pieces"
-              >
-                <div className="w-9 h-9 flex items-center justify-center">
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                    <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z" />
-                  </svg>
-                </div>
-                <span className="text-[9px] font-bold tracking-wider font-['Orbitron',sans-serif]">
-                  REROLL
-                </span>
-              </button>
-
-              {/* Settings / Pause Tab */}
+              {/* Settings / Pause Tab (Bottom Right Corner: 10px margin from screen border) */}
               <button
                 type="button"
                 onClick={() => setIsPaused(true)}
-                className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200 cursor-pointer"
+                style={{ marginRight: 10, marginBottom: 10, marginLeft: 4, marginTop: 2 }}
+                className="flex-1 max-w-[88px] min-h-[44px] py-1 px-1.5 rounded-xl flex flex-col items-center justify-center text-center gap-1.5 text-slate-400 hover:text-slate-200 cursor-pointer hover:bg-[#142036]/50 transition-colors box-border"
               >
-                <div className="w-9 h-9 flex items-center justify-center">
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                    <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z" />
+                <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                  <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                    <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
                   </svg>
                 </div>
-                <span className="text-[9px] font-bold tracking-wider font-['Orbitron',sans-serif]">
+                <span className="text-[9px] font-bold tracking-wider font-['Orbitron',sans-serif] leading-normal text-center">
                   SETTINGS
                 </span>
               </button>
@@ -1232,36 +1118,36 @@ export default function App() {
 
             {/* Pause / Settings Modal Overlay */}
             {isPaused && (
-              <div className="absolute inset-0 bg-[#070a11]/90 backdrop-blur-sm z-40 flex flex-col items-center justify-center p-5 text-center animate-fadeIn select-none">
-                <div className="w-full max-w-[270px] bg-[#0c1220] border border-[#1b263d] rounded-2xl p-4 shadow-2xl flex flex-col gap-3">
-                  <div className="flex items-center justify-between border-b border-[#172238] pb-2">
-                    <h2 className="text-sm font-black text-white font-['Orbitron',sans-serif] tracking-wider">
+              <div className="absolute inset-0 bg-[#070a11]/90 backdrop-blur-sm z-40 flex flex-col items-center justify-center p-4 sm:p-6 text-center animate-fadeIn select-none">
+                <div className="w-full max-w-[340px] bg-[#0c1220] border border-[#1b263d] rounded-2xl p-4 sm:p-6 shadow-2xl flex flex-col gap-3.5">
+                  <div className="flex items-center justify-between border-b border-[#172238] pb-3 px-1">
+                    <h2 className="text-sm font-black text-white font-['Orbitron',sans-serif] tracking-wider leading-normal">
                       GAME PAUSED
                     </h2>
-                    <span className="text-[10px] text-[#3debe0] font-['Orbitron',sans-serif] font-bold">
+                    <span className="text-[10px] text-[#3debe0] font-['Orbitron',sans-serif] font-bold leading-normal">
                       SETTINGS
                     </span>
                   </div>
 
                   {/* Audio Volume Controls (Directly accessible in Pause) */}
-                  <div className="bg-[#101726] border border-[#19243a] rounded-xl p-2.5 flex flex-col gap-2.5 text-left">
+                  <div className="bg-[#101726] border border-[#19243a] rounded-xl p-3.5 flex flex-col gap-3 text-left">
                     {/* Music Loudness */}
                     <div>
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[10px] font-bold text-slate-300 font-['Orbitron',sans-serif] flex items-center gap-1.5">
-                          <svg className="w-3 h-3 text-[#3debe0] fill-current" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 text-[#3debe0] fill-current" viewBox="0 0 24 24">
                             <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
                           </svg>
                           MUSIC
                         </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-black text-[#3debe0] font-['Orbitron',sans-serif]">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black text-[#3debe0] font-['Orbitron',sans-serif] tabular-nums">
                             {Math.round(musicVolume * 100)}%
                           </span>
                           <button
                             type="button"
                             onClick={toggleMusic}
-                            className={`text-[8px] font-bold px-1.5 py-0.5 rounded border font-['Orbitron',sans-serif] cursor-pointer transition-colors ${
+                            className={`min-h-[52px] px-6 py-[14px] rounded-xl border font-['Orbitron',sans-serif] cursor-pointer transition-colors text-xs font-bold flex items-center justify-center leading-normal box-border ${
                               musicEnabled
                                 ? 'bg-[#17303d] border-[#3debe0]/60 text-[#3debe0]'
                                 : 'bg-[#181f2f] border-[#25324b] text-slate-500'
@@ -1285,21 +1171,21 @@ export default function App() {
 
                     {/* Sound FX Loudness */}
                     <div>
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[10px] font-bold text-slate-300 font-['Orbitron',sans-serif] flex items-center gap-1.5">
-                          <svg className="w-3 h-3 text-[#3debe0] fill-current" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 text-[#3debe0] fill-current" viewBox="0 0 24 24">
                             <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
                           </svg>
                           SOUND FX
                         </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-black text-[#3debe0] font-['Orbitron',sans-serif]">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black text-[#3debe0] font-['Orbitron',sans-serif] tabular-nums">
                             {Math.round(soundVolume * 100)}%
                           </span>
                           <button
                             type="button"
                             onClick={toggleSound}
-                            className={`text-[8px] font-bold px-1.5 py-0.5 rounded border font-['Orbitron',sans-serif] cursor-pointer transition-colors ${
+                            className={`min-h-[52px] px-6 py-[14px] rounded-xl border font-['Orbitron',sans-serif] cursor-pointer transition-colors text-xs font-bold flex items-center justify-center leading-normal box-border ${
                               soundEnabled
                                 ? 'bg-[#17303d] border-[#3debe0]/60 text-[#3debe0]'
                                 : 'bg-[#181f2f] border-[#25324b] text-slate-500'
@@ -1326,12 +1212,12 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Navigation Actions */}
-                  <div className="flex flex-col gap-1.5">
+                  {/* Navigation Actions: 12px gap, at least 4px separation */}
+                  <div className="flex flex-col gap-3 pt-1">
                     <button
                       type="button"
                       onClick={() => setIsPaused(false)}
-                      className="w-full py-2.5 rounded-xl bg-[#3debe0] text-[#070a11] font-black tracking-wider hover:bg-[#34d1c6] active:scale-95 transition-all shadow-md cursor-pointer text-xs font-['Orbitron',sans-serif]"
+                      className="btn-creatyxo w-full rounded-2xl bg-[#3debe0] hover:bg-[#34d1c6] text-[#070a11] font-black tracking-wider text-xs sm:text-sm font-['Orbitron',sans-serif] shadow-[0_0_16px_rgba(61,235,224,0.35)] active:scale-95 transition-all cursor-pointer m-1"
                     >
                       RESUME
                     </button>
@@ -1340,20 +1226,9 @@ export default function App() {
                       type="button"
                       onClick={() => {
                         setIsPaused(false);
-                        startInteractiveTutorial();
-                      }}
-                      className="w-full py-2 rounded-xl bg-[#141b2e] border border-[#222f4b] text-slate-200 hover:text-white font-bold tracking-wider hover:bg-[#1a253f] active:scale-95 transition-all cursor-pointer text-xs font-['Orbitron',sans-serif]"
-                    >
-                      HOW TO PLAY (TEST)
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsPaused(false);
                         openLeaderboard('game');
                       }}
-                      className="w-full py-2 rounded-xl bg-[#141b2e] border border-[#222f4b] text-slate-200 hover:text-white font-bold tracking-wider hover:bg-[#1a253f] active:scale-95 transition-all cursor-pointer text-xs font-['Orbitron',sans-serif]"
+                      className="btn-creatyxo w-full rounded-xl bg-[#141b2e] border border-[#222f4b] hover:border-[#3debe0]/40 text-slate-200 hover:text-white font-bold tracking-wider text-xs font-['Orbitron',sans-serif] hover:bg-[#1a253f] active:scale-95 transition-all cursor-pointer m-1"
                     >
                       LEADERBOARD
                     </button>
@@ -1364,7 +1239,7 @@ export default function App() {
                         setIsPaused(false);
                         setActiveScreen('home');
                       }}
-                      className="w-full py-2 rounded-xl bg-[#141b2e] border border-[#222f4b] text-slate-200 hover:text-white font-bold tracking-wider hover:bg-[#1a253f] active:scale-95 transition-all cursor-pointer text-xs font-['Orbitron',sans-serif]"
+                      className="btn-creatyxo w-full rounded-xl bg-[#141b2e] border border-[#222f4b] hover:border-[#3debe0]/40 text-slate-200 hover:text-white font-bold tracking-wider text-xs font-['Orbitron',sans-serif] hover:bg-[#1a253f] active:scale-95 transition-all cursor-pointer m-1"
                     >
                       HOME SCREEN
                     </button>
@@ -1372,7 +1247,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={resetGame}
-                      className="w-full py-2 rounded-xl bg-[#141b2e] border border-[#222f4b] text-slate-400 hover:text-white font-bold tracking-wider hover:bg-[#1a253f] active:scale-95 transition-all cursor-pointer text-xs font-['Orbitron',sans-serif]"
+                      className="btn-creatyxo w-full rounded-xl bg-[#141b2e] border border-[#222f4b] hover:border-rose-500/40 text-slate-400 hover:text-rose-300 font-bold tracking-wider text-xs font-['Orbitron',sans-serif] hover:bg-[#1a253f] active:scale-95 transition-all cursor-pointer m-1"
                     >
                       RESTART
                     </button>
@@ -1383,63 +1258,63 @@ export default function App() {
 
             {/* Ending Screen (Clean & Calm) */}
             {isGameOver && (
-              <div className="absolute inset-0 bg-[#070a11]/95 backdrop-blur-md z-40 flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
+              <div className="absolute inset-0 bg-[#070a11]/95 backdrop-blur-md z-40 flex flex-col items-center justify-center p-4 sm:p-6 text-center animate-fadeIn select-none">
                 {isNewRecord && score > 0 ? (
-                  <span className="px-3 py-1 rounded-full bg-[#f6c445]/20 text-[#f6c445] border border-[#f6c445]/40 text-[10px] font-bold tracking-widest uppercase mb-3">
+                  <span className="px-4 py-1.5 rounded-full bg-[#f6c445]/20 text-[#f6c445] border border-[#f6c445]/40 text-[10px] font-bold tracking-widest uppercase mb-3 leading-normal flex items-center justify-center">
                     NEW ALL-TIME RECORD
                   </span>
                 ) : (
-                  <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-3">
+                  <span className="text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-3 leading-normal flex items-center justify-center">
                     SESSION COMPLETED
                   </span>
                 )}
 
-                <h2 className="text-3xl font-black text-white font-['Orbitron',sans-serif] tracking-wider mb-3">
+                <h2 className="text-3xl font-black text-white font-['Orbitron',sans-serif] tracking-wider mb-3 leading-tight flex items-center justify-center text-center">
                   GAME OVER
                 </h2>
 
                 {/* Score Summary Box */}
-                <div className="w-full max-w-[280px] bg-[#0c1220] border border-[#1d273f] rounded-2xl p-4 shadow-xl mb-5">
-                  <div className="flex flex-col items-center">
-                    <span className="text-[10px] font-bold text-slate-400 tracking-wider">
+                <div className="w-full max-w-[320px] bg-[#0c1220] border border-[#1d273f] rounded-2xl p-4 sm:p-6 shadow-xl mb-4">
+                  <div className="flex flex-col items-center justify-center text-center">
+                    <span className="text-[10px] font-bold text-slate-400 tracking-wider leading-normal">
                       FINAL SCORE
                     </span>
-                    <span className="text-3xl font-black text-[#3debe0] tracking-wide mt-1 font-['Orbitron',sans-serif]">
+                    <span className="text-3xl font-black text-[#3debe0] tracking-wide mt-2 font-['Orbitron',sans-serif] leading-tight tabular-nums">
                       {score.toLocaleString()}
                     </span>
                   </div>
 
-                  <div className="h-px bg-[#192338] my-3" />
+                  <div className="h-px bg-[#192338] my-3.5" />
 
                   {/* Stats Grid: Best, Lines Cleared, Max Combo */}
                   <div className="grid grid-cols-3 gap-2 text-center font-['Orbitron',sans-serif]">
-                    <div className="flex flex-col">
-                      <span className="text-[9px] font-bold text-slate-400">BEST</span>
-                      <span className="text-sm font-black text-[#f6c445] mt-0.5">
+                    <div className="flex flex-col items-center justify-center">
+                      <span className="text-[9px] font-bold text-slate-400 leading-normal">BEST</span>
+                      <span className="text-sm font-black text-[#f6c445] mt-1.5 leading-normal tabular-nums">
                         {bestScore.toLocaleString()}
                       </span>
                     </div>
-                    <div className="flex flex-col border-x border-[#192338]">
-                      <span className="text-[9px] font-bold text-slate-400">LINES</span>
-                      <span className="text-sm font-black text-white mt-0.5">
+                    <div className="flex flex-col items-center justify-center border-x border-[#192338]">
+                      <span className="text-[9px] font-bold text-slate-400 leading-normal">LINES</span>
+                      <span className="text-sm font-black text-white mt-1.5 leading-normal tabular-nums">
                         {totalLinesCleared}
                       </span>
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-[9px] font-bold text-slate-400">COMBO</span>
-                      <span className="text-sm font-black text-[#f43f5e] mt-0.5">
+                    <div className="flex flex-col items-center justify-center">
+                      <span className="text-[9px] font-bold text-slate-400 leading-normal">COMBO</span>
+                      <span className="text-sm font-black text-[#f43f5e] mt-1.5 leading-normal tabular-nums">
                         {maxCombo > 0 ? `${maxCombo}x` : '1x'}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Action Buttons: Play Again, View Rankings, Main Menu */}
-                <div className="flex flex-col gap-2.5 w-full max-w-[280px]">
+                {/* Action Buttons: 12px gap, at least 4px separation */}
+                <div className="flex flex-col gap-3 w-full max-w-[320px]">
                   <button
                     type="button"
                     onClick={resetGame}
-                    className="w-full py-3.5 rounded-xl bg-[#3debe0] hover:bg-[#34d1c6] text-[#070a11] font-black tracking-wider text-xs font-['Orbitron',sans-serif] active:scale-95 transition-all shadow-md cursor-pointer"
+                    className="btn-creatyxo w-full rounded-2xl bg-[#3debe0] hover:bg-[#34d1c6] text-[#070a11] font-black tracking-widest text-xs sm:text-sm font-['Orbitron',sans-serif] shadow-[0_0_20px_rgba(61,235,224,0.4)] active:scale-95 transition-all cursor-pointer m-1"
                   >
                     PLAY AGAIN
                   </button>
@@ -1450,7 +1325,7 @@ export default function App() {
                       setIsGameOver(false);
                       openLeaderboard('game');
                     }}
-                    className="w-full py-2.5 rounded-xl bg-[#121828] border border-[#1d273f] text-slate-200 hover:text-white font-bold tracking-wider text-xs font-['Orbitron',sans-serif] active:scale-95 transition-all cursor-pointer"
+                    className="btn-creatyxo w-full rounded-xl bg-[#121828] border border-[#1d273f] hover:border-[#3debe0]/40 text-slate-200 hover:text-white font-bold tracking-wider text-xs font-['Orbitron',sans-serif] active:scale-95 transition-all cursor-pointer m-1"
                   >
                     LEADERBOARD
                   </button>
@@ -1461,7 +1336,7 @@ export default function App() {
                       setIsGameOver(false);
                       setActiveScreen('home');
                     }}
-                    className="w-full py-2 rounded-xl bg-transparent text-slate-500 hover:text-slate-300 font-bold tracking-wider text-xs font-['Orbitron',sans-serif] active:scale-95 transition-all cursor-pointer"
+                    className="btn-creatyxo w-full rounded-xl bg-transparent hover:bg-[#121828] border border-[#1d273f]/60 hover:border-[#1d273f] text-slate-400 hover:text-slate-200 font-bold tracking-wider text-xs font-['Orbitron',sans-serif] active:scale-95 transition-all cursor-pointer m-1"
                   >
                     MAIN MENU
                   </button>

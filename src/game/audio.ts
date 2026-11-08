@@ -162,39 +162,42 @@ export function playPlaceSound(enabled = true) {
 }
 
 /**
- * Clear rows/columns and trigger combo (Louder, bright sparkling chime)
+ * Clear rows/columns and trigger combo with rich harmonic chimes and fanfare
  */
-export function playClearSound(combo = 1, enabled = true) {
+export function playClearSound(combo = 1, linesCleared = 1, enabled = true) {
   if (!enabled || currentSoundVolume <= 0) return;
   const ctx = getAudioContext();
   if (!ctx) return;
 
   try {
-    // Pentatonic scale notes based on combo
-    const baseFreqs = [523.25, 659.25, 783.99, 1046.5, 1318.51, 1567.98];
-    const notes = [
-      baseFreqs[combo % baseFreqs.length],
-      baseFreqs[(combo + 2) % baseFreqs.length],
-      baseFreqs[(combo + 4) % baseFreqs.length],
-    ];
+    // Ascending celebratory notes tailored to combo count and line count
+    const pentatonic = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.51, 1567.98, 1760.0];
+    const startIndex = Math.min(pentatonic.length - 4, (combo - 1) % 5);
+    const noteCount = linesCleared >= 3 ? 5 : linesCleared >= 2 ? 4 : 3;
+    const notes: number[] = [];
+
+    for (let i = 0; i < noteCount; i++) {
+      const idx = (startIndex + i * 2) % pentatonic.length;
+      notes.push(pentatonic[idx]);
+    }
 
     notes.forEach((freq, idx) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.07);
+      osc.type = combo >= 3 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.06);
 
-      const peak = 0.55 * currentSoundVolume;
-      gain.gain.setValueAtTime(0, ctx.currentTime + idx * 0.07);
-      gain.gain.linearRampToValueAtTime(peak, ctx.currentTime + idx * 0.07 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.07 + 0.28);
+      const peak = (0.45 + Math.min(0.25, combo * 0.05)) * currentSoundVolume;
+      gain.gain.setValueAtTime(0, ctx.currentTime + idx * 0.06);
+      gain.gain.linearRampToValueAtTime(peak, ctx.currentTime + idx * 0.06 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.06 + 0.32);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
 
-      osc.start(ctx.currentTime + idx * 0.07);
-      osc.stop(ctx.currentTime + idx * 0.07 + 0.28);
+      osc.start(ctx.currentTime + idx * 0.06);
+      osc.stop(ctx.currentTime + idx * 0.06 + 0.32);
     });
   } catch {
     // Ignore

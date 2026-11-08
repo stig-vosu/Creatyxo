@@ -64,11 +64,11 @@ export const AudioSettingsModal: React.FC<AudioSettingsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#070a11]/90 backdrop-blur-md animate-fadeIn select-none"
+      className="fixed inset-[10px] z-50 flex items-center justify-center p-4 bg-[#070a11]/90 backdrop-blur-md animate-fadeIn select-none rounded-2xl overflow-hidden"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm bg-[#0c1220] border border-[#1b263d] rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-left"
+        className="w-full max-w-sm bg-[#0c1220] border border-[#1b263d] rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-left m-2"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -83,7 +83,7 @@ export const AudioSettingsModal: React.FC<AudioSettingsModalProps> = ({
               <h2 className="text-sm font-black text-white font-['Orbitron',sans-serif] tracking-wider">
                 AUDIO SETTINGS
               </h2>
-              <p className="text-[10px] text-slate-400 font-['Orbitron',sans-serif] tracking-wide">
+              <p className="text-[10px] text-slate-400 font-['Orbitron',sans-serif] tracking-wide mt-1">
                 ADJUST MUSIC & SOUND LOUDNESS
               </p>
             </div>
@@ -93,7 +93,7 @@ export const AudioSettingsModal: React.FC<AudioSettingsModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label="Close audio settings"
-            className="w-7 h-7 rounded-lg bg-[#141d2f] hover:bg-[#1a263d] border border-[#22304d] text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer text-xs font-bold"
+            className="btn-creatyxo-icon rounded-xl bg-[#141d2f] hover:bg-[#1a263d] border border-[#22304d] text-slate-400 hover:text-white transition-colors cursor-pointer text-xs font-bold shrink-0 m-1"
           >
             ✕
           </button>
@@ -116,7 +116,7 @@ export const AudioSettingsModal: React.FC<AudioSettingsModalProps> = ({
             <button
               type="button"
               onClick={onToggleMusic}
-              className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-colors cursor-pointer font-['Orbitron',sans-serif] ${
+              className={`btn-creatyxo text-xs font-bold rounded-xl border transition-colors cursor-pointer m-1 ${
                 musicEnabled
                   ? 'bg-[#17303d] border-[#3debe0]/60 text-[#3debe0]'
                   : 'bg-[#181f2f] border-[#25324b] text-slate-500'
@@ -138,7 +138,7 @@ export const AudioSettingsModal: React.FC<AudioSettingsModalProps> = ({
               className="cyber-slider flex-1"
               aria-label="Background music volume"
             />
-            <span className="text-xs font-black text-[#3debe0] font-['Orbitron',sans-serif] w-10 text-right">
+            <span className="text-xs font-black text-[#3debe0] font-['Orbitron',sans-serif] w-10 text-right tabular-nums">
               {musicPercent}%
             </span>
           </div>
@@ -161,7 +161,7 @@ export const AudioSettingsModal: React.FC<AudioSettingsModalProps> = ({
             <button
               type="button"
               onClick={onToggleSound}
-              className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-colors cursor-pointer font-['Orbitron',sans-serif] ${
+              className={`btn-creatyxo text-xs font-bold rounded-xl border transition-colors cursor-pointer m-1 ${
                 soundEnabled
                   ? 'bg-[#17303d] border-[#3debe0]/60 text-[#3debe0]'
                   : 'bg-[#181f2f] border-[#25324b] text-slate-500'
@@ -183,32 +183,32 @@ export const AudioSettingsModal: React.FC<AudioSettingsModalProps> = ({
               className="cyber-slider flex-1"
               aria-label="Sound effects volume"
             />
-            <span className="text-xs font-black text-[#3debe0] font-['Orbitron',sans-serif] w-10 text-right">
+            <span className="text-xs font-black text-[#3debe0] font-['Orbitron',sans-serif] w-10 text-right tabular-nums">
               {soundPercent}%
             </span>
           </div>
         </div>
 
-        {/* Preset Quick Buttons */}
-        <div className="flex items-center justify-between gap-2 pt-1">
+        {/* Preset Quick Buttons: 12px gap, 14px 24px padding, 52px min-height */}
+        <div className="flex items-center justify-between gap-3 pt-1">
           <button
             type="button"
             onClick={() => handleSetPreset('mute')}
-            className="flex-1 py-1.5 px-2 rounded-lg bg-[#141b2a] hover:bg-[#192236] border border-[#202b42] text-[10px] font-bold text-slate-400 hover:text-white font-['Orbitron',sans-serif] transition-all cursor-pointer text-center"
+            className="btn-creatyxo flex-1 rounded-xl bg-[#141b2a] hover:bg-[#192236] border border-[#202b42] text-[10px] sm:text-xs font-bold text-slate-400 hover:text-white font-['Orbitron',sans-serif] transition-all cursor-pointer m-1"
           >
             MUTE ALL
           </button>
           <button
             type="button"
             onClick={() => handleSetPreset('balanced')}
-            className="flex-1 py-1.5 px-2 rounded-lg bg-[#141b2a] hover:bg-[#192236] border border-[#202b42] text-[10px] font-bold text-slate-300 hover:text-[#3debe0] font-['Orbitron',sans-serif] transition-all cursor-pointer text-center"
+            className="btn-creatyxo flex-1 rounded-xl bg-[#141b2a] hover:bg-[#192236] border border-[#202b42] text-[10px] sm:text-xs font-bold text-slate-300 hover:text-[#3debe0] font-['Orbitron',sans-serif] transition-all cursor-pointer m-1"
           >
             60% CHILL
           </button>
           <button
             type="button"
             onClick={() => handleSetPreset('max')}
-            className="flex-1 py-1.5 px-2 rounded-lg bg-[#141b2a] hover:bg-[#192236] border border-[#202b42] text-[10px] font-bold text-[#3debe0] hover:bg-[#1c2e42] font-['Orbitron',sans-serif] transition-all cursor-pointer text-center"
+            className="btn-creatyxo flex-1 rounded-xl bg-[#141b2a] hover:bg-[#192236] border border-[#202b42] text-[10px] sm:text-xs font-bold text-[#3debe0] hover:bg-[#1c2e42] font-['Orbitron',sans-serif] transition-all cursor-pointer m-1"
           >
             100% MAX
           </button>
@@ -218,7 +218,7 @@ export const AudioSettingsModal: React.FC<AudioSettingsModalProps> = ({
         <button
           type="button"
           onClick={onClose}
-          className="w-full py-2.5 rounded-xl bg-[#3debe0] hover:bg-[#34d1c6] text-[#070a11] font-black tracking-widest text-xs font-['Orbitron',sans-serif] active:scale-95 transition-all shadow-[0_0_14px_rgba(61,235,224,0.3)] cursor-pointer mt-1"
+          className="btn-creatyxo w-full rounded-2xl bg-[#3debe0] hover:bg-[#34d1c6] text-[#070a11] font-black tracking-widest text-xs sm:text-sm font-['Orbitron',sans-serif] shadow-[0_0_18px_rgba(61,235,224,0.35)] cursor-pointer mt-2 m-1 active:scale-95 transition-all"
         >
           CONFIRM & CLOSE
         </button>

@@ -18,7 +18,6 @@ interface HomeScreenProps {
   onStartGame: () => void;
   onOpenLeaderboard: () => void;
   onOpenNameModal: () => void;
-  onOpenTutorial: () => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -33,136 +32,99 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onStartGame,
   onOpenLeaderboard,
   onOpenNameModal,
-  onOpenTutorial,
 }) => {
   const tier = getTierFromScore(bestScore);
   const tierStyle = getTierBadgeStyle(tier);
   const initial = (playerProfile.avatarLetter || playerProfile.username.charAt(0) || 'P').toUpperCase();
 
   return (
-    <div className="w-full h-full flex flex-col justify-between items-center text-center px-4 py-6 select-none animate-fadeIn">
-      {/* Top Header Bar */}
-      <header className="w-full flex items-center justify-between">
-        {/* Player Profile Chip */}
+    <div className="w-full h-full flex flex-col justify-between items-center text-center select-none animate-fadeIn">
+      {/* Top Header Bar: Corner buttons have explicit 10px margins from screen border and >=4px from neighbors */}
+      <header className="w-full flex items-center justify-between px-2 sm:px-3 pt-1">
+        {/* Player Profile Chip (Top Left Corner: 10px margin from top/left border, 4px from neighbors) */}
         <button
           type="button"
           onClick={onOpenNameModal}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#101625] border border-[#1b263d] hover:border-[#3debe0]/50 transition-all cursor-pointer group active:scale-95 shadow-sm"
+          style={{ marginLeft: 10, marginTop: 10, marginRight: 4, marginBottom: 4 }}
+          className="btn-creatyxo rounded-xl bg-[#101625] border border-[#1b263d] hover:border-[#3debe0]/50 transition-all cursor-pointer group active:scale-95 shadow-sm gap-2.5 max-w-[70%]"
           title="Click to edit player name"
         >
           {/* Monogram Circle */}
-          <div className="w-7 h-7 rounded-lg bg-[#172238] border border-[#233250] text-[#3debe0] font-black text-xs flex items-center justify-center font-['Orbitron',sans-serif]">
+          <div className="w-7 h-7 rounded-lg bg-[#172238] border border-[#233250] text-[#3debe0] font-black text-xs flex items-center justify-center text-center font-['Orbitron',sans-serif] shrink-0">
             {initial}
           </div>
 
-          <div className="flex flex-col text-left">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-white font-['Orbitron',sans-serif] group-hover:text-[#3debe0] transition-colors">
+          <div className="flex flex-col text-left justify-center min-w-0 pr-1 gap-1">
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="text-xs font-bold text-white font-['Orbitron',sans-serif] group-hover:text-[#3debe0] transition-colors truncate leading-normal">
                 {playerProfile.username}
               </span>
               {playerProfile.tag && (
-                <span className="text-[10px] text-slate-500 font-mono">
+                <span className="text-[10px] text-slate-500 font-mono shrink-0">
                   #{playerProfile.tag}
                 </span>
               )}
             </div>
-            <span className="text-[9px] text-slate-400 font-['Orbitron',sans-serif] tracking-wider">
+            <span className="text-[8.5px] text-slate-400 font-['Orbitron',sans-serif] tracking-wider leading-normal mt-1">
               EDIT NAME
             </span>
           </div>
         </button>
 
-        {/* Audio Controls Group: Sliders, Music & SFX */}
-        <div className="flex items-center gap-1.5">
-          {/* Audio Loudness Settings Modal Button */}
-          <button
-            type="button"
-            onClick={onOpenAudioSettings}
-            className="w-9 h-9 rounded-xl border border-[#1b263d] bg-[#101625] text-slate-400 hover:text-[#3debe0] hover:border-[#3debe0]/50 flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-sm"
-            aria-label="Adjust sound and music volume"
-            title="Adjust Sound & Music Loudness"
-          >
-            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-              <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z" />
-            </svg>
-          </button>
-
-          {/* Music Toggle (Ambient Lo-Fi Synth) */}
-          <button
-            type="button"
-            onClick={onToggleMusic}
-            className={`w-9 h-9 rounded-xl border flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-sm ${
-              musicEnabled
-                ? 'bg-[#101625] border-[#3debe0]/50 text-[#3debe0]'
-                : 'bg-[#101625] border-[#1b263d] text-slate-500'
-            }`}
-            aria-label="Toggle background music"
-            title={musicEnabled ? 'Chill Music: ON' : 'Chill Music: OFF'}
-          >
-            {/* Music Note SVG */}
-            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-            </svg>
-          </button>
-
-          {/* Sound Effects Toggle */}
-          <button
-            type="button"
-            onClick={onToggleSound}
-            className={`w-9 h-9 rounded-xl border flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-sm ${
-              soundEnabled
-                ? 'bg-[#101625] border-[#3debe0]/50 text-[#3debe0]'
-                : 'bg-[#101625] border-[#1b263d] text-slate-500'
-            }`}
-            aria-label="Toggle sound effects"
-            title={soundEnabled ? 'SFX: ON' : 'SFX: OFF'}
-          >
-            {soundEnabled ? (
-              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                <path d="M14 3.23v17.54a1 1 0 0 1-1.6.8L6.7 16H3a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1h3.7l5.7-5.57a1 1 0 0 1 1.6.8zm4.5 5.27a1 1 0 0 1 1.41.09A7.95 7.95 0 0 1 22 12c0 2.22-.9 4.23-2.35 5.68a1 1 0 1 1-1.42-1.41A5.96 5.96 0 0 0 20 12c0-1.66-.67-3.17-1.76-4.27a1 1 0 0 1 .26-1.23z" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27l4.73 4.73H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
-              </svg>
-            )}
-          </button>
-        </div>
+        {/* Settings Button (Top Right Corner: 10px margin from top/right border, 4px from neighbors) */}
+        <button
+          type="button"
+          onClick={onOpenAudioSettings}
+          style={{
+            padding: 8,
+            marginLeft: 4,
+            marginRight: 10,
+            marginTop: 10,
+            marginBottom: 4,
+          }}
+          className="btn-creatyxo-icon rounded-xl border border-[#1b263d] bg-[#101625] text-slate-400 hover:text-[#3debe0] hover:border-[#3debe0]/50 cursor-pointer active:scale-95 transition-all shadow-sm shrink-0"
+          aria-label="Settings, Sound & Music"
+          title="Settings (Music & Sound)"
+        >
+          <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
+            <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+          </svg>
+        </button>
       </header>
 
-      {/* Central Branding with ample whitespace */}
-      <div className="flex flex-col items-center gap-5 my-auto py-4">
+      {/* Central Branding with balanced spatial margins */}
+      <div className="flex flex-col items-center gap-5 my-auto py-3">
         {/* Title */}
         <div className="flex flex-col items-center gap-1.5">
-          <h1 className="text-4xl sm:text-5xl font-black text-[#3debe0] font-['Black_Ops_One',sans-serif] tracking-wider drop-shadow-[0_0_16px_rgba(61,235,224,0.35)]">
+          <h1 className="text-4xl sm:text-5xl font-black text-[#3debe0] font-['Black_Ops_One',sans-serif] tracking-wider drop-shadow-[0_0_18px_rgba(61,235,224,0.38)] leading-tight text-center">
             CREATYXO
           </h1>
-          <p className="text-[10px] font-bold tracking-[0.28em] text-slate-400 font-['Orbitron',sans-serif] uppercase">
+          <p className="text-[10px] font-bold tracking-[0.28em] text-slate-400 font-['Orbitron',sans-serif] uppercase leading-normal mt-1 text-center">
             BLOCK PUZZLE
           </p>
         </div>
 
-        {/* Clean Score Card */}
-        <div className="w-full max-w-[280px] bg-[#0c1220] border border-[#1b263d] rounded-2xl px-5 py-3.5 flex items-center justify-between shadow-sm">
-          <div className="flex flex-col text-left">
-            <span className="text-[10px] font-bold text-slate-400 font-['Orbitron',sans-serif] tracking-wider">
+        {/* Clean Score Card with >=4px distance */}
+        <div className="w-full max-w-[320px] bg-[#0c1220] border border-[#1b263d] rounded-2xl px-5 py-3.5 flex items-center justify-between shadow-sm min-h-[66px]">
+          <div className="flex flex-col text-left justify-center gap-1">
+            <span className="text-[10px] font-bold text-slate-400 font-['Orbitron',sans-serif] tracking-wider leading-normal">
               BEST SCORE
             </span>
-            <span className="text-2xl font-black text-[#f6c445] font-['Orbitron',sans-serif] mt-0.5">
+            <span className="text-xl sm:text-2xl font-black text-[#f6c445] font-['Orbitron',sans-serif] mt-1 leading-normal">
               {bestScore.toLocaleString()}
             </span>
           </div>
 
-          <div className="flex flex-col items-end">
-            <span className="text-[10px] font-bold text-slate-400 font-['Orbitron',sans-serif] tracking-wider">
+          <div className="flex flex-col items-end justify-center gap-1">
+            <span className="text-[10px] font-bold text-slate-400 font-['Orbitron',sans-serif] tracking-wider leading-normal">
               RANK
             </span>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-sm font-black text-white font-['Orbitron',sans-serif]">
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-sm font-black text-white font-['Orbitron',sans-serif] leading-normal">
                 #{userRank}
               </span>
               <span
-                className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${tierStyle.bg} ${tierStyle.text} ${tierStyle.border} font-['Orbitron',sans-serif]`}
+                className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${tierStyle.bg} ${tierStyle.text} ${tierStyle.border} font-['Orbitron',sans-serif] leading-normal`}
               >
                 {tier}
               </span>
@@ -171,13 +133,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
       </div>
 
-      {/* Spacious Main Action Buttons */}
-      <div className="w-full max-w-[300px] flex flex-col gap-2.5 mb-1">
+      {/* Spacious Main Action Buttons: Inset 10px from border, 12px gap between buttons */}
+      <div className="w-full max-w-[320px] sm:max-w-[340px] px-3 sm:px-4 flex flex-col gap-3 mb-2.5">
         {/* PRIMARY: JUMP INTO THE GAME */}
         <button
           type="button"
           onClick={onStartGame}
-          className="w-full py-4 rounded-xl bg-[#3debe0] hover:bg-[#34d1c6] text-[#070a11] font-black tracking-widest text-xs font-['Orbitron',sans-serif] active:scale-95 transition-all shadow-[0_0_18px_rgba(61,235,224,0.3)] cursor-pointer"
+          className="btn-creatyxo w-full rounded-2xl bg-[#3debe0] hover:bg-[#34d1c6] text-[#070a11] font-black tracking-widest text-xs sm:text-sm font-['Orbitron',sans-serif] shadow-[0_0_24px_rgba(61,235,224,0.38)] active:scale-95 transition-all cursor-pointer m-1"
         >
           JUMP INTO THE GAME
         </button>
@@ -186,23 +148,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <button
           type="button"
           onClick={onOpenLeaderboard}
-          className="w-full py-3 rounded-xl bg-[#121828] border border-[#1d273f] hover:border-[#3debe0]/40 text-slate-200 hover:text-white font-bold tracking-wider text-xs font-['Orbitron',sans-serif] hover:bg-[#161f33] active:scale-95 transition-all cursor-pointer"
+          className="btn-creatyxo w-full rounded-xl bg-[#121828] border border-[#1d273f] hover:border-[#3debe0]/40 text-slate-200 hover:text-white font-bold tracking-wider text-xs font-['Orbitron',sans-serif] hover:bg-[#161f33] active:scale-95 transition-all cursor-pointer m-1"
         >
           LEADERBOARD
         </button>
-
-        {/* TERTIARY: HOW TO PLAY TUTORIAL */}
-        <button
-          type="button"
-          onClick={onOpenTutorial}
-          className="w-full py-2.5 rounded-xl bg-transparent border border-transparent hover:border-[#1d273f] text-slate-400 hover:text-slate-200 font-bold tracking-wider text-xs font-['Orbitron',sans-serif] transition-all cursor-pointer"
-        >
-          HOW TO PLAY
-        </button>
       </div>
 
-      {/* Clean quiet footer */}
-      <footer className="text-[9px] text-slate-600 font-['Orbitron',sans-serif] tracking-widest uppercase">
+      {/* Clean quiet footer: at least 10px from screen bottom border */}
+      <footer className="text-[9px] text-slate-600 font-['Orbitron',sans-serif] tracking-widest uppercase pb-2.5 mb-2.5 leading-normal">
         Match Rows & Columns
       </footer>
     </div>
